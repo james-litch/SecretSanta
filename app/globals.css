@@ -1,26 +1,54 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+@import '../components/Button/Button.css' layer(components);
+@import '../components/Disclosure/Disclosure.css' layer(components);
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-cream: #faf7ef;
+  --color-cream-light: #fffdf8;
+  --color-cream-dark: #c9c9bc;
+  --color-green: #194c39;
+  --color-green-dark: #193c31;
+  --color-green-darker: #103b2b;
+  --color-green-muted: #59665d;
+  --color-green-soft: #426446;
+  --color-cranberry: #8b293e;
+  --color-cranberry-muted: #f5e5e8;
+  --color-gold: #916518;
+  --font-body: Arial, sans-serif;
+  --font-display: Georgia, serif;
+  --text-fl-xl: clamp(2.3rem, 4.4vw, 3.8rem);
+  --text-fl-xl--line-height: 1.12;
 }
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: light;
+  }
+  body {
+    background: var(--color-cream);
+    color: var(--color-green-dark);
+    font-family: var(--font-body);
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    font-weight: var(--font-weight-normal);
+  }
+  a {
+    text-decoration: underline;
+    text-underline-offset: 0.22em;
+  }
+  a:hover {
+    text-decoration: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-cranberry);
+    outline-offset: --spacing(0.5);
   }
 }
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  *::details-content {
+    transition: none !important;
+    animation: none !important;
+  }
 }
