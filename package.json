@@ -8,15 +8,27 @@
     "start": "next start",
     "lint": "eslint",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:storybook": "vitest run --project storybook",
+    "test:browser": "playwright test",
+    "test": "npm run test:unit && npm run test:integration && npm run test:storybook && npm run test:browser",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@tabler/icons-react": "^3.49.0",
+    "clsx": "^2.1.1",
     "next": "16.4.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "redis": "^6.3.0"
   },
   "devDependencies": {
     "@chromatic-com/storybook": "latest",
+    "@playwright/test": "^1.64.0",
     "@storybook/addon-a11y": "^10.6.1",
     "@storybook/addon-docs": "^10.6.1",
     "@storybook/addon-mcp": "^10.6.1",
@@ -35,6 +47,7 @@
     "msw": "^2.15.0",
     "msw-storybook-addon": "^3.0.3",
     "playwright": "latest",
+    "prettier": "^3.9.9",
     "storybook": "^10.6.1",
     "tailwindcss": "^4",
     "typescript": "^5",

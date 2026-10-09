@@ -1,0 +1,8 @@
+.next/
+coverage/
+playwright-report/
+test-results/
+storybook-static/
+package-lock.json
+
+/.next-test/

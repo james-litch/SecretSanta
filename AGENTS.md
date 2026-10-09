@@ -24,3 +24,12 @@ before triaging issues.
 
 Use a single-context layout. Read `docs/agents/domain.md`
 before exploring the codebase.
+
+### Code structure
+
+Read `docs/agents/code-structure.md` before creating, editing, or reviewing
+React components, hooks, layouts, styles, or Storybook stories.
+
+### Formatting
+
+Format every file you change using the project's tooling and conventions.

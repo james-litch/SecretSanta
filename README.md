@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Secret Santa
 
-## Getting Started
+A private gift exchange for friends and family. This slice implements room creation and returning as its owner ([#12](https://github.com/james-litch/SecretSanta/issues/12)). Joining, drawing, results and automatic room polling belong to later slices.
 
-First, run the development server:
+## Local development
 
-```bash
+Requires Node.js 22.12+ (Node 24 LTS recommended), npm, and Docker Compose. No cloud account or credentials are needed. The UI uses Georgia and Arial from the device, with serif/sans-serif fallback; no font download is required.
+
+```sh
+npm ci
+cp .env.example .env.local
+docker compose up -d --wait
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [the app](http://localhost:3000). Create a room with your name, then refresh, open its address in another tab, or revisit in the same browser. Keep the room address: the room code alone cannot recover identity. Other browser profiles cannot read its participants.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+[Redis Insight](http://localhost:5540) can connect to host `redis`, port `6379`, without credentials inside the Compose network. Both published services bind only to loopback. Redis 7.4.2 Alpine and Redis Insight 2.66.0 are pinned and health checked. Development Redis persists to the `redis-data` volume.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```sh
+docker compose ps
+docker compose stop                 # stop, retain data
+# Start again with docker compose up -d --wait
+docker compose down                 # remove containers, retain data
+# Destructive local reset: deletes all development rooms
+docker compose down --volumes
+```
 
-## Learn More
+## Configuration
 
-To learn more about Next.js, take a look at the following resources:
+`.env.example` documents `REDIS_URL`, `ROOM_MAX_PARTICIPANTS` (default 30, integer >= 3) and `ROOM_LIFETIME_DAYS` (default 7, positive representable integer). Startup rejects invalid capacity/lifetime. Each room snapshots both settings and its deadline; changing configuration does not alter existing rooms. Production uses `rediss://` with the provisioned provider credentials and Secure cookies. Hosted connectivity and free-tier headroom still require a separate release check.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Cloud-free verification
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The separate test Redis uses loopback port 6380, no persistent volume and no persistence. Tests never flush development Redis. Start it before integration or browser checks:
 
-## Deploy on Vercel
+```sh
+docker compose -f compose.test.yaml up -d --wait
+npx playwright install chromium
+npm run typecheck
+npm run lint
+npm test
+npm run build
+npm run build-storybook
+docker compose -f compose.test.yaml down
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Individual suites:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sh
+npm run test:unit         # focused name normalization and startup configuration contracts
+npm run test:integration  # public HTTP handlers backed by real disposable Redis
+npm run test:storybook    # presentation states, interaction and accessibility checks
+npm run test:browser      # real Next.js create/revisit and failure journeys
+```
+
+Playwright starts its own Next.js server on port 3100 with test Redis, capacity 12 and a one-day lifetime. Its isolated `.next-test` build directory lets it run alongside the normal development server. If using installed Chrome instead of bundled Chromium: `PLAYWRIGHT_CHANNEL=chrome npm run test:browser`.
+
+Integration tests call the public Route Handlers with actual requests and actual Redis. They cover identity isolation, public response projection, hashed storage, same-origin rejection, concurrent creation, payload binding, fixed TTL/configuration, expired/missing reads and recovery without recreation. Direct Redis inspection is confined to the at-rest privacy and TTL contracts, and expiry fault injection.
+
+Browser tests cover validation/focus, creation with skewed browser clocks, creating again after navigating home, refresh, shared tabs, revisit, lost-response recovery, offline/pending submission prevention, invalid access, known expiry offline, copy fallback and FAQ keyboard behavior. UI styles belong to Storybook: light-only appearance, two typography roles, focus styling, regular FAQ question weight and automated accessibility/contrast checks. Run `npm run storybook` to inspect the mobile, pending, validation, owner, unavailable, invalid-access and connection-failure states.
+
+## Storage and operation boundaries
+
+- Each room is one Redis hash, reserved and then created with expiry by small atomic Lua scripts. It owns metadata, participant IDs/display names, credential hashes, normalized-name index, roster version and the create retry record. Missing reads never write.
+- POST `/api/rooms` requires an exact same-origin header. `{ phase: "prepare", name }` reserves a candidate with a server-generated 256-bit operation secret and a 15-minute server-owned deadline. The response contains the name and secret but creates no room or identity cookie. A lost preparation response leaves only a reservation that expires automatically; preparing again always issues a different secret.
+- The browser saves that operation in tab session storage before submitting `{ name, secret }` to the same endpoint. The server atomically turns an existing reservation into a room, or recovers an existing room. Original requests and retries use identical bodies: no client timestamp or retry flag controls creation. Losing the reservation/room key makes every commit return unavailable, including a delayed duplicate original request. Expired recovery never extends room lifetime.
+- Domain-separated SHA-256 derives a stable 96-bit candidate code and private credential from the operation secret. The scripts bind the operation to its normalized name, reject candidate collisions without overwriting, and store only hashes of secrets and credentials. Pending secrets are discarded from both session storage and React state after success, so returning home permits a fresh creation. Abandoning an uncertain attempt explicitly starts a separate operation and may leave the first room to expire. Pending operations from the earlier browser-generated protocol cannot recover through this new protocol; abandon them and start again. Existing room cookies and reads remain valid.
+- GET `/api/rooms/:code` requires its room-scoped HttpOnly, SameSite=Lax cookie. The response contains only the current participant’s allowed view. Every handled API outcome is `private, no-store`; secrets are never in URLs or logs. Pages contain a public shell and load membership only through the authenticated endpoint.
+- The Node Redis client is reused per server instance, disables offline command queuing, bounds connection retries and command waiting, and sanitizes service failures. A timeout may follow a committed write, so the browser retains the original attempt.
+
+The installed Next.js documentation was consulted for Route Handlers, cookies, instrumentation and runtime configuration. With this version’s Cache Components, Node is the default and explicit route `runtime` exports are unsupported.
