@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createClient } from 'redis';
 import { NextRequest } from 'next/server';
 import { POST as create } from '../../app/api/rooms/route';
@@ -132,6 +132,29 @@ it('concurrent retries converge and retain payload binding and the original dead
   expect(await redis.hGet(`room:${owner.view.code}`, 'rosterVersion')).toBe(
     '2',
   );
+});
+
+it('rejects an operation that expires in transit without changing committed membership', async () => {
+  const owner = await room();
+  const operation = { name: 'Sam', secret: secret() };
+  const first = await joining(owner.view.code, operation);
+  const view = await first.json();
+  const key = `room:${owner.view.code}`;
+  const field = `join:${createHash('sha256').update(operation.secret).digest('hex')}`;
+  const record = JSON.parse((await redis.hGet(key, field))!);
+  await redis.hSet(
+    key,
+    field,
+    JSON.stringify({ ...record, expiresAt: Date.now() + 150 }),
+  );
+  await redis.sendCommand(['CLIENT', 'PAUSE', '300', 'WRITE']);
+  const response = await joining(owner.view.code, operation);
+  expect(await response.json()).toMatchObject({ error: 'invalid_operation' });
+  expect(response.headers.get('set-cookie')).toBeNull();
+  expect(await (await reading(owner.view.code, cookie(first))).json()).toEqual(
+    view,
+  );
+  expect(await redis.pExpireTime(key)).toBe(view.expiresAt);
 });
 
 it('normalizes duplicate names atomically across browsers without reclaiming identity', async () => {

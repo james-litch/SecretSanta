@@ -92,7 +92,7 @@ function RoomContent({ code }: { code: string }) {
                 disabled={room.participants.length < 3 || busy || offline}
                 aria-describedby="draw-minimum"
                 command="show-modal"
-                commandFor="draw-confirmation"
+                commandfor="draw-confirmation"
               >
                 Draw names
               </Button>
@@ -114,7 +114,7 @@ function RoomContent({ code }: { code: string }) {
                   <Button
                     disabled={busy || offline}
                     command="close"
-                    commandFor="draw-confirmation"
+                    commandfor="draw-confirmation"
                     onClick={draw}
                   >
                     Confirm draw

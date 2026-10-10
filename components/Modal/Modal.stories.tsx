@@ -8,12 +8,12 @@ const meta = {
   args: { id: 'example-modal', title: 'A little gathering', closedby: 'any' },
   render: (args) => (
     <>
-      <Button command="show-modal" commandFor={args.id}>
+      <Button command="show-modal" commandfor={args.id}>
         Open modal
       </Button>
       <Modal {...args}>
         <p className="mb-6">Bring your group together for a lovely surprise.</p>
-        <Button command="close" commandFor={args.id}>
+        <Button command="close" commandfor={args.id}>
           Cancel
         </Button>
       </Modal>

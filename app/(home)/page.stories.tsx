@@ -111,6 +111,49 @@ export const ServiceFailure: Story = {
   },
 };
 
+export const ExpiredCreateAttempt: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/rooms', async ({ request }) => {
+          const body = (await request.json()) as {
+            phase?: string;
+            name: string;
+          };
+          if (body.phase === 'prepare')
+            return HttpResponse.json({
+              name: body.name,
+              secret: 'a'.repeat(64),
+            });
+          return HttpResponse.json(
+            {
+              error: 'invalid_operation',
+              message:
+                'This create attempt has expired. If it completed, that room remains until it expires. Creating again starts a separate room.',
+            },
+            { status: 400 },
+          );
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText('Your name'), 'James');
+    await userEvent.click(canvas.getByRole('button', { name: 'Create room' }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'attempt has expired',
+    );
+    await expect(canvas.getByLabelText('Your name')).not.toHaveAttribute(
+      'readonly',
+    );
+    await expect(canvas.getByLabelText('Your name')).toHaveValue('James');
+    await expect(
+      canvas.getByRole('button', { name: 'Create room' }),
+    ).toBeEnabled();
+  },
+};
+
 export const JoinValidation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

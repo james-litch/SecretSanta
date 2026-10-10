@@ -70,6 +70,7 @@ test('uncertain joining retains the same operation across refresh and recovers o
     originalBody = route.request().postData()!;
     const response = await route.fetch();
     participantId = (await response.json()).currentParticipantId;
+    await page.context().clearCookies();
     await route.abort('failed');
     await page.unroute('**/api/rooms/*/join');
   });

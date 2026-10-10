@@ -25,7 +25,7 @@ export function Modal({
         className="absolute top-2 right-2 inline-flex size-10 items-center justify-center rounded-md hover:bg-cream cursor-pointer"
         aria-label="Close modal"
         command="close"
-        commandFor={id}
+        commandfor={id}
       >
         <IconX aria-hidden="true" size={20} />
       </button>
