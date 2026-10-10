@@ -1,6 +1,6 @@
 # Secret Santa
 
-A private gift exchange for friends and family. This implements room creation, joining from separate browsers, private participant access and code sharing ([#12](https://github.com/james-litch/SecretSanta/issues/12), [#13](https://github.com/james-litch/SecretSanta/issues/13)). Owners can confirm one fair draw and every participant can read their private saved recipient ([#14](https://github.com/james-litch/SecretSanta/issues/14)). Create/join retries recover the original operation after a lost response or cookie ([#15](https://github.com/james-litch/SecretSanta/issues/15)). Automatic room polling belongs to a later slice.
+A private gift exchange for friends and family. This implements room creation, joining from separate browsers, private participant access and code sharing ([#12](https://github.com/james-litch/SecretSanta/issues/12), [#13](https://github.com/james-litch/SecretSanta/issues/13)). Owners can confirm one fair draw and every participant can read their private saved recipient ([#14](https://github.com/james-litch/SecretSanta/issues/14)). Create/join retries recover the original operation after a lost response or cookie ([#15](https://github.com/james-litch/SecretSanta/issues/15)). Waiting rooms update automatically while visible and online, with reconnection feedback ([#16](https://github.com/james-litch/SecretSanta/issues/16)).
 
 ## Local development
 
@@ -13,7 +13,7 @@ docker compose up -d --wait
 npm run dev
 ```
 
-Open [the app](http://localhost:3000). Create a room with your name, then refresh, open its address in another tab, or revisit in the same browser. Keep the room address: the room code alone cannot recover identity. Share the room code with someone in a separate browser/profile; they can join with their own name while the owner is offline. Refresh the room page to retrieve the current roster. A repeated join in the same browser returns its existing participant. Other browser profiles cannot read participants until they join. Once at least three participants have joined, the owner can choose **Draw names**, then confirm or cancel. Drawing closes joining permanently. Each participant sees only their own gift recipient; other participants refresh their room to discover the result. Returning in the same browser shows the same result until the original deadline.
+Open [the app](http://localhost:3000). Create a room with your name, then refresh, open its address in another tab, or revisit in the same browser. Keep the room address: the room code alone cannot recover identity. Share the room code with someone in a separate browser/profile; they can join with their own name while the owner is offline. Visible, online waiting rooms retrieve the current roster every three seconds. A repeated join in the same browser returns its existing participant. Other browser profiles cannot read participants until they join. Once at least three participants have joined, the owner can choose **Draw names**, then confirm or cancel. Drawing closes joining permanently. Each participant sees only their own gift recipient; other participants discover the result automatically. Returning in the same browser shows the same result until the original deadline.
 
 [Redis Insight](http://localhost:5540) can connect to host `redis`, port `6379`, without credentials inside the Compose network. Both published services bind only to loopback. Redis 7.4.2 Alpine and Redis Insight 2.66.0 are pinned and health checked. Development Redis persists to the `redis-data` volume.
 
@@ -90,7 +90,7 @@ npm run test:storybook -- 'app/rooms/[code]/page.stories.tsx' components/Modal/M
 npm run test:browser -- tests/browser/draw.spec.ts
 ```
 
-These verify assignment invariants/reciprocal pairs, real Redis competing draws and join races, owner authorization, private response shapes, fixed expiry, recovery after drawing, separate-browser recipients/revisits, competing owner tabs, response loss before and after commit, offline submission prevention, result expiry, and confirmation/result accessibility. Polling and hosted verification remain separate slices.
+These verify assignment invariants/reciprocal pairs, real Redis competing draws and join races, owner authorization, private response shapes, fixed expiry, recovery after drawing, separate-browser recipients/revisits, competing owner tabs, response loss before and after commit, offline submission prevention, result expiry, and confirmation/result accessibility. Hosted verification remains a separate release gate.
 
 ## Lost create/join response verification
 
@@ -105,3 +105,18 @@ npm run test:storybook -- 'app/(home)/page.stories.tsx'
 ```
 
 The browser tests deliberately drop both the post-commit response and cookie, reload the landing page, and recover the same identity. Full and drawn room journeys verify unchanged membership, expiry and saved results, authenticated revisits, offline retry prevention and pending-secret removal. Integration tests additionally verify payload binding, secret/credential privacy, concurrent retry convergence, early storage loss, and expiry while Redis delays a request. These commands need no cloud credentials; the full verification commands above remain the completion check.
+
+## Waiting-room connection verification
+
+Waiting rooms read their authenticated, private/no-store endpoint every three seconds after the preceding request completes. Each tab operates independently with one request in flight and no visible-tab idle cutoff. Hidden/offline tabs pause; returning refreshes immediately, or queues one refresh after an active request completes. A saved draw, invalid identity, unavailable room, expiry or navigation away stops polling. Known expiry still removes waiting and result content offline.
+
+Transient failures preserve the last known roster with explicit stale/reconnecting feedback. Retries wait 6, 12, 24, then at most every 30 seconds; success restores three-second polling. Offline controls prevent submissions and membership stays intact. Background reads leave controls and keyboard focus alone. New participants and restored connections are announced; unchanged polls do not change live-region text. Saved results focus their heading automatically.
+
+After starting disposable Redis, run:
+
+```sh
+npm run test:browser -- tests/browser/polling.spec.ts tests/browser/draw.spec.ts
+npm run test:storybook -- 'app/rooms/[code]/page.stories.tsx'
+```
+
+The polling suite controls browser time, visibility, connectivity and HTTP responses to verify cadence, capped backoff/reset, stale/offline races, non-overlapping resume, terminal/expiry/navigation stops, participant announcements, focus and automatic result discovery. These controlled browser tests cover browser-flow behavior; the real-Redis integration and draw suites remain the privacy, authorization and storage contract checks. Storybook includes loaded Reconnecting and Offline examples alongside confirmation, uncertain draw and private results. Run `npm test` for all four suites.

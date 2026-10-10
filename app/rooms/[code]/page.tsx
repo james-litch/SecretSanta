@@ -27,8 +27,18 @@ function Room() {
 }
 
 function RoomContent({ code }: { code: string }) {
-  const { room, error, terminal, busy, load, draw, retry, offline, uncertain } =
-    useRoom(code);
+  const {
+    room,
+    error,
+    terminal,
+    busy,
+    load,
+    draw,
+    retry,
+    offline,
+    uncertain,
+    announcement,
+  } = useRoom(code);
   const headingProps = useAutoFocus<HTMLHeadingElement>();
 
   if (!room && terminal) return <RoomUnavailable error={error} />;
@@ -57,6 +67,9 @@ function RoomContent({ code }: { code: string }) {
           </Button>
         </SystemMessage>
       )}
+      <p role="status" aria-label="Room updates" className="sr-only">
+        {announcement}
+      </p>
       <RoomCodeShareCard code={room.code} className="mb-6" />
       <p className="mb-2 text-left">
         {room.participants.length}{' '}

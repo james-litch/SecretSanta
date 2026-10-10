@@ -205,7 +205,9 @@ test('copy fallback and FAQ disclosures work by keyboard', async ({ page }) => {
     });
   });
   await page.getByRole('button', { name: 'Copy', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Select and copy');
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Select and copy' }),
+  ).toBeVisible();
   await expect(page.getByRole('main').getByLabel('Room code')).toBeVisible();
   await page.getByRole('link', { name: 'FAQ', exact: true }).click();
   const question = page

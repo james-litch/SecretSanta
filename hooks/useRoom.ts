@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RoomView } from '@/lib/rooms/types';
 const checking = 'Checking whether the draw completed…';
+const offlineMessage =
+  'You’re offline. Any displayed room information was last confirmed earlier.';
 const stale =
-  'We couldn’t check your room. Any displayed information was last confirmed earlier. Try again.';
+  'We couldn’t check your room. Any displayed information was last confirmed earlier. Reconnecting automatically.';
 
 export function useRoom(code: string) {
   const [room, setRoom] = useState<RoomView | null>(null);
@@ -13,81 +15,160 @@ export function useRoom(code: string) {
   const [offline, setOffline] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const uncertainRef = useRef(false);
-  const inFlight = useRef(false);
+  const [announcement, setAnnouncement] = useState('');
+  const currentRoom = useRef<RoomView | null>(null);
+  const failures = useRef(0);
+  const interrupted = useRef(false);
+  const schedule = useRef<(delay?: number) => void>(() => {});
+  const cancelTimer = useRef(() => {});
+  const resumePending = useRef(false);
+  const foreground = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
+  const controller = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const expired = useRef(false);
   const request = useCallback(
     async (
       method: 'GET' | 'POST',
+      background = false,
     ): Promise<RoomView | 'transient' | undefined> => {
-      if (inFlight.current || expired.current) return;
-      if (!navigator.onLine) {
-        setBusy(false);
-        setError(
-          `${uncertainRef.current ? checking + ' ' : ''}You’re offline. Reconnect and try again. Any displayed room information was last confirmed earlier.`,
-        );
-        return;
+      if (!background && foreground.current) return;
+      if (!background) {
+        foreground.current = true;
+        setBusy(true);
+        if (method === 'POST') setError('Drawing names…');
       }
-      inFlight.current = true;
-      setBusy(true);
-      if (method === 'POST') setError('Drawing names…');
-      else if (uncertainRef.current) setError(checking);
       try {
-        const response = await fetch(
-          `/api/rooms/${code}${method === 'POST' ? '/draw' : ''}`,
-          {
-            method,
-            cache: 'no-store',
-            signal: AbortSignal.timeout(10_000),
-          },
-        );
-        const data = await response.json();
-        if (!alive.current || expired.current) return;
+        while (inFlight.current) {
+          if (background) return;
+          await inFlight.current;
+        }
         if (
-          (response.ok && data.expiresAt <= Date.now()) ||
-          response.status === 401 ||
-          response.status === 404
-        ) {
-          setRoom(null);
-          setTerminal(true);
-          expired.current = true;
+          !alive.current ||
+          expired.current ||
+          currentRoom.current?.state === 'drawn'
+        )
+          return;
+        if (background && document.visibilityState !== 'visible') return;
+        cancelTimer.current();
+        if (!navigator.onLine) {
           setError(
-            response.ok
-              ? 'This room doesn’t exist or has expired.'
-              : data.message,
+            `${uncertainRef.current ? checking + ' ' : ''}You’re offline. Reconnect and try again. Any displayed room information was last confirmed earlier.`,
           );
-        } else if (response.ok) {
-          setRoom(data);
-          if (data.state === 'drawn') {
+          return;
+        }
+        let release!: () => void;
+        inFlight.current = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        const activeController = new AbortController();
+        controller.current = activeController;
+        if (method === 'POST') setError('Drawing names…');
+        else if (uncertainRef.current && !background) setError(checking);
+        try {
+          const response = await fetch(
+            `/api/rooms/${code}${method === 'POST' ? '/draw' : ''}`,
+            {
+              method,
+              cache: 'no-store',
+              signal: AbortSignal.any([
+                activeController.signal,
+                AbortSignal.timeout(10_000),
+              ]),
+            },
+          );
+          const data = await response.json();
+          if (
+            !alive.current ||
+            expired.current ||
+            activeController.signal.aborted
+          )
+            return;
+          if (
+            (response.ok && data.expiresAt <= Date.now()) ||
+            response.status === 401 ||
+            response.status === 404
+          ) {
+            setRoom(null);
+            setTerminal(true);
+            expired.current = true;
+            setError(
+              response.ok
+                ? 'This room doesn’t exist or has expired.'
+                : data.message,
+            );
+          } else if (response.ok) {
+            const restored = interrupted.current && navigator.onLine;
+            if (navigator.onLine) interrupted.current = false;
+            failures.current = 0;
+            if (restored)
+              setAnnouncement('Connection restored. Your room is up to date.');
+            const previous = currentRoom.current;
+            if (previous && data.state === 'waiting') {
+              const joined = (data as RoomView).participants.filter(
+                (participant) =>
+                  !previous.participants.some(
+                    (known) => known.id === participant.id,
+                  ),
+              );
+              if (joined.length)
+                setAnnouncement(
+                  `${restored ? 'Connection restored. ' : ''}${joined.map((participant) => participant.name).join(', ')} joined the room.`,
+                );
+            }
+            currentRoom.current = data;
+            setRoom(data);
+            if (data.state === 'drawn') {
+              uncertainRef.current = false;
+              setUncertain(false);
+            }
+            setError(
+              !navigator.onLine
+                ? offlineMessage
+                : uncertainRef.current
+                  ? 'No saved draw was found yet. Try again to check and complete the draw.'
+                  : '',
+            );
+            return data;
+          } else if (response.status < 500) {
             uncertainRef.current = false;
             setUncertain(false);
+            setError(data.message);
+          } else throw new Error('Transient service failure');
+        } catch {
+          if (
+            !alive.current ||
+            expired.current ||
+            activeController.signal.aborted
+          )
+            return;
+          interrupted.current = true;
+          failures.current = Math.min(failures.current + 1, 4);
+          if (method === 'POST') {
+            uncertainRef.current = true;
+            setUncertain(true);
           }
           setError(
-            uncertainRef.current
-              ? 'No saved draw was found yet. Try again to check and complete the draw.'
-              : '',
+            !navigator.onLine
+              ? offlineMessage
+              : uncertainRef.current
+                ? `${checking} Connection interrupted. Try again to check the saved outcome.`
+                : stale,
           );
-          return data;
-        } else if (response.status < 500) {
-          uncertainRef.current = false;
-          setUncertain(false);
-          setError(data.message);
-        } else throw new Error('Transient service failure');
-      } catch {
-        if (!alive.current || expired.current) return;
-        if (method === 'POST') {
-          uncertainRef.current = true;
-          setUncertain(true);
+          return 'transient';
+        } finally {
+          inFlight.current = null;
+          release();
+          if (alive.current && !activeController.signal.aborted) {
+            schedule.current(resumePending.current ? 0 : undefined);
+            resumePending.current = false;
+          }
         }
-        setError(
-          uncertainRef.current
-            ? `${checking} Connection interrupted. Try again to check the saved outcome.`
-            : stale,
-        );
-        return 'transient';
       } finally {
-        inFlight.current = false;
-        if (alive.current) setBusy(false);
+        if (!background) {
+          foreground.current = false;
+          if (alive.current) setBusy(false);
+        }
       }
     },
     [code],
@@ -110,30 +191,73 @@ export function useRoom(code: string) {
   }, [request, draw]);
   useEffect(() => {
     alive.current = true;
-    // Synchronize the initial screen with the authenticated external room service.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const canRefresh = () =>
+      alive.current &&
+      !expired.current &&
+      currentRoom.current?.state !== 'drawn' &&
+      navigator.onLine &&
+      document.visibilityState === 'visible';
+    cancelTimer.current = () => clearTimeout(timer);
+    schedule.current = (
+      delay = failures.current
+        ? Math.min(3000 * 2 ** failures.current, 30_000)
+        : 3000,
+    ) => {
+      clearTimeout(timer);
+      if (canRefresh())
+        timer = setTimeout(() => {
+          void request('GET', true);
+        }, delay);
+    };
+    const resume = () => {
+      clearTimeout(timer);
+      if (!canRefresh()) return;
+      if (inFlight.current && controller.current?.signal.aborted) {
+        void inFlight.current.then(resume);
+      } else if (inFlight.current) resumePending.current = true;
+      else void request('GET', !!currentRoom.current);
+    };
     const wentOffline = () => {
+      clearTimeout(timer);
+      resumePending.current = false;
+      interrupted.current = true;
       setOffline(true);
       setError(
-        `${uncertainRef.current ? checking + ' ' : ''}You’re offline. Any displayed room information was last confirmed earlier.`,
+        `${uncertainRef.current ? checking + ' ' : ''}${offlineMessage}`,
       );
     };
-    const wentOnline = () => setOffline(false);
+    const wentOnline = () => {
+      setOffline(false);
+      if (currentRoom.current?.state === 'drawn' && !expired.current) {
+        setError('');
+        setAnnouncement('You’re back online. Your saved result is shown.');
+        interrupted.current = false;
+      }
+      resume();
+    };
     if (!navigator.onLine) wentOffline();
+    // Initial synchronization with the authenticated room service.
+    resume();
     window.addEventListener('offline', wentOffline);
     window.addEventListener('online', wentOnline);
+    document.addEventListener('visibilitychange', resume);
     return () => {
       alive.current = false;
+      clearTimeout(timer);
+      controller.current?.abort();
       window.removeEventListener('offline', wentOffline);
       window.removeEventListener('online', wentOnline);
+      document.removeEventListener('visibilitychange', resume);
     };
-  }, [load]);
+  }, [request]);
   useEffect(() => {
     if (!room) return;
     const checkExpiry = () => {
       if (Date.now() >= room.expiresAt) {
         expired.current = true;
+        cancelTimer.current();
+        controller.current?.abort();
         setRoom(null);
         setTerminal(true);
         setError('This room doesn’t exist or has expired.');
@@ -147,5 +271,16 @@ export function useRoom(code: string) {
       window.removeEventListener('visibilitychange', checkExpiry);
     };
   }, [room]);
-  return { room, error, terminal, busy, load, draw, retry, offline, uncertain };
+  return {
+    room,
+    error,
+    terminal,
+    busy,
+    load,
+    draw,
+    retry,
+    offline,
+    uncertain,
+    announcement,
+  };
 }

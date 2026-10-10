@@ -107,7 +107,6 @@ export const LoadedConnectionFailure: Story = {
     );
     await expect(canvas.getByText('You · Room owner')).toBeVisible();
     window.dispatchEvent(new Event('online'));
-    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await waitFor(() =>
       expect(canvas.queryByRole('alert')).not.toBeInTheDocument(),
     );
@@ -231,5 +230,69 @@ export const UncertainDraw: Story = {
     await expect(
       canvas.getByRole('list', { name: 'Participants' }),
     ).toBeVisible();
+  },
+};
+
+export const Reconnecting: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(
+          `/api/rooms/${room.code}`,
+          () => HttpResponse.json(readyRoom),
+          { once: true },
+        ),
+        http.get(`/api/rooms/${room.code}`, () =>
+          HttpResponse.json({ error: 'service_unavailable' }, { status: 503 }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('list', { name: 'Participants' });
+    await waitFor(
+      () =>
+        expect(canvas.getByRole('alert')).toHaveTextContent(
+          'Reconnecting automatically',
+        ),
+      { timeout: 5000 },
+    );
+    await expect(
+      canvas.getByRole('list', { name: 'Participants' }),
+    ).toHaveTextContent('Sam');
+  },
+};
+
+export const Offline: Story = {
+  parameters: ConfirmDraw.parameters,
+  beforeEach: () => {
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+    return () => {
+      if (descriptor) Object.defineProperty(navigator, 'onLine', descriptor);
+      else Reflect.deleteProperty(navigator, 'onLine');
+      window.dispatchEvent(new Event('online'));
+    };
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole('list', { name: 'Participants' });
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    });
+    window.dispatchEvent(new Event('offline'));
+    await waitFor(() =>
+      expect(canvas.getByRole('alert')).toHaveTextContent('You’re offline'),
+    );
+    await expect(
+      canvas.getByRole('button', { name: 'Draw names' }),
+    ).toBeDisabled();
+    await expect(
+      canvas.getByRole('button', { name: 'Try again' }),
+    ).toBeDisabled();
+    await expect(
+      canvas.getByRole('list', { name: 'Participants' }),
+    ).toHaveTextContent('Sam');
   },
 };
