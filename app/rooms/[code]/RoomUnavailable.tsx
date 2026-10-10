@@ -21,7 +21,7 @@ export function RoomUnavailable({ error }: Props) {
         <SystemMessage className="my-4" role="alert">
           <p className="mb-4 text-xl">{error}</p>
 
-          <Link href="/faq#browser">About room access</Link>
+          <a href="/faq#browser">About room access</a>
         </SystemMessage>
       )}
 

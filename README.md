@@ -1,6 +1,6 @@
 # Secret Santa
 
-A private gift exchange for friends and family. This implements room creation, joining from separate browsers, private participant access and code sharing ([#12](https://github.com/james-litch/SecretSanta/issues/12), [#13](https://github.com/james-litch/SecretSanta/issues/13)). Drawing, results, automatic recovery and automatic room polling belong to later slices.
+A private gift exchange for friends and family. This implements room creation, joining from separate browsers, private participant access and code sharing ([#12](https://github.com/james-litch/SecretSanta/issues/12), [#13](https://github.com/james-litch/SecretSanta/issues/13)). Owners can confirm one fair draw and every participant can read their private saved recipient ([#14](https://github.com/james-litch/SecretSanta/issues/14)). Automatic room polling and broader automatic create/join recovery belong to later slices.
 
 ## Local development
 
@@ -13,7 +13,7 @@ docker compose up -d --wait
 npm run dev
 ```
 
-Open [the app](http://localhost:3000). Create a room with your name, then refresh, open its address in another tab, or revisit in the same browser. Keep the room address: the room code alone cannot recover identity. Share the room code with someone in a separate browser/profile; they can join with their own name while the owner is offline. Refresh the room page to retrieve the current roster. A repeated join in the same browser returns its existing participant. Other browser profiles cannot read participants until they join.
+Open [the app](http://localhost:3000). Create a room with your name, then refresh, open its address in another tab, or revisit in the same browser. Keep the room address: the room code alone cannot recover identity. Share the room code with someone in a separate browser/profile; they can join with their own name while the owner is offline. Refresh the room page to retrieve the current roster. A repeated join in the same browser returns its existing participant. Other browser profiles cannot read participants until they join. Once at least three participants have joined, the owner can choose **Draw names**, then confirm or cancel. Drawing closes joining permanently. Each participant sees only their own gift recipient; other participants refresh their room to discover the result. Returning in the same browser shows the same result until the original deadline.
 
 [Redis Insight](http://localhost:5540) can connect to host `redis`, port `6379`, without credentials inside the Compose network. Both published services bind only to loopback. Redis 7.4.2 Alpine and Redis Insight 2.66.0 are pinned and health checked. Development Redis persists to the `redis-data` volume.
 
@@ -48,10 +48,10 @@ docker compose -f compose.test.yaml down
 Individual suites:
 
 ```sh
-npm run test:unit         # focused name normalization and startup configuration contracts
+npm run test:unit         # names, configuration and valid random assignment contracts
 npm run test:integration  # public HTTP handlers backed by real disposable Redis
 npm run test:storybook    # presentation states, interaction and accessibility checks
-npm run test:browser      # real Next.js create/join/revisit and failure journeys
+npm run test:browser      # real Next.js create/join/draw/revisit and failure journeys
 ```
 
 Playwright starts its own Next.js server on port 3100 with test Redis, capacity 12 and a one-day lifetime. Its isolated `.next-test` build directory lets it run alongside the normal development server. If using installed Chrome instead of bundled Chromium: `PLAYWRIGHT_CHANNEL=chrome npm run test:browser`.
@@ -72,3 +72,22 @@ Browser tests cover separate-browser joining with an offline owner, repeated joi
 - The Node Redis client is reused per server instance, disables offline command queuing, bounds connection retries and command waiting, and sanitizes service failures. A timeout may follow a committed write, so the browser retains the original attempt.
 
 The installed Next.js documentation was consulted for Route Handlers, cookies, instrumentation and runtime configuration. With this version’s Cache Components, Node is the default and explicit route `runtime` exports are unsupported.
+
+## One-time draw verification
+
+POST `/api/rooms/:code/draw` takes no assignment or participant choice from the browser. It requires same-origin owner access. The server generates a proposal for the current roster, then a Redis script checks identity, ownership, Redis server time against the original expiry, waiting state, minimum membership, and roster version before writing the complete mapping and drawn state together. A roster change discards the proposal and generates a fresh one; retries are bounded under sustained contention. A saved draw always wins. Reads project only the authenticated participant's recipient, even for the owner, and never expose the mapping.
+
+The algorithm uses cryptographic `randomInt` in Fisher–Yates: each complete permutation has probability `1/n!`. Rejecting all permutations containing a self-assignment conditions that uniform distribution on exactly the valid assignments. Thus every derangement is equally likely, including reciprocal pairs and multiple cycles. Acceptance is at least one third for eligible rosters, tending to `1/e`; no statistical frequency test is used as a proof of fairness.
+
+An uncertain POST immediately shows “Checking whether the draw completed…” and reads the saved outcome. If the read fails, the last known room stays visible with connection feedback. **Try again** checks first and only resubmits if the server still reports waiting; the atomic commit still preserves any concurrently saved result. Definitive errors report their actual reason. Native modal confirmation supports cancellation, Escape, contained focus and trigger restoration; saved results focus the new heading and have no reveal animation. Known expiry removes waiting and drawn content even offline.
+
+Focused commands (after starting test Redis):
+
+```sh
+npm run test:unit -- tests/unit/draw.test.ts
+npm run test:integration -- tests/integration/draw.test.ts tests/integration/join.test.ts
+npm run test:storybook -- 'app/rooms/[code]/page.stories.tsx' components/Modal/Modal.stories.tsx
+npm run test:browser -- tests/browser/draw.spec.ts
+```
+
+These verify assignment invariants/reciprocal pairs, real Redis competing draws and join races, owner authorization, private response shapes, fixed expiry, recovery after drawing, separate-browser recipients/revisits, competing owner tabs, response loss before and after commit, offline submission prevention, result expiry, and confirmation/result accessibility. Polling and hosted verification remain separate slices.

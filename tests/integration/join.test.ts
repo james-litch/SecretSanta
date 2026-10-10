@@ -4,6 +4,7 @@ import { createClient } from 'redis';
 import { NextRequest } from 'next/server';
 import { POST as create } from '../../app/api/rooms/route';
 import { POST as join } from '../../app/api/rooms/[code]/join/route';
+import { POST as draw } from '../../app/api/rooms/[code]/draw/route';
 import { GET as read } from '../../app/api/rooms/[code]/route';
 
 process.env.REDIS_URL = 'redis://127.0.0.1:6380';
@@ -234,13 +235,17 @@ it('recovers committed membership after joining closes, but never after expiry o
   const joined = await joining(owner.view.code, operation);
   const member = await joined.json();
   const key = `room:${owner.view.code}`;
-  await redis.hSet(key, 'state', 'drawn');
+  await joining(owner.view.code, { name: 'Third', secret: secret() });
+  await draw(
+    request(`/api/rooms/${owner.view.code}/draw`, {}, { cookie: owner.cookie }),
+    { params: Promise.resolve({ code: owner.view.code }) },
+  );
   const recovered = await joining(owner.view.code, operation);
   expect(recovered.status).toBe(200);
   expect(cookie(recovered)).toBe(cookie(joined));
   expect(await recovered.json()).toMatchObject({
     currentParticipantId: member.currentParticipantId,
-    participants: member.participants,
+    state: 'drawn',
   });
   expect(await redis.pExpireTime(key)).toBe(owner.view.expiresAt);
   await redis.pExpire(key, 1);

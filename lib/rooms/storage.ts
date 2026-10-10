@@ -4,6 +4,7 @@ import {
   randomUUID,
   timingSafeEqual,
 } from 'node:crypto';
+import { generateDraw } from './draw';
 import { roomRedis } from './redis';
 import { roomConfig, normalizeName } from './rules';
 import type { PendingCreate, RoomView } from './types';
@@ -128,10 +129,7 @@ export async function createRoom(operation: PendingCreate) {
   };
 }
 
-export async function readRoom(
-  code: string,
-  credential?: string,
-): Promise<RoomView> {
+async function authorizedRoom(code: string, credential?: string) {
   if (!/^[A-F0-9]{24}$/.test(code)) throw unavailable();
   const redis = await roomRedis();
   const data = await redis.hGetAll(`room:${code}`);
@@ -146,19 +144,36 @@ export async function readRoom(
     throw new RoomError(
       'invalid_identity',
       401,
-      'Your saved access is missing or invalid. Your name and room code cannot recover it.',
+      !credential && data.state === 'drawn'
+        ? 'This room has already drawn. Open it in the browser you used to join.'
+        : 'Your saved access is missing or invalid. Your name and room code cannot recover it.',
     );
-  const currentParticipantId = entry[1];
+  return { data, currentParticipantId: entry[1] };
+}
+
+export async function readRoom(
+  code: string,
+  credential?: string,
+): Promise<RoomView> {
+  const { data, currentParticipantId } = await authorizedRoom(code, credential);
+  const participants: RoomView['participants'] = JSON.parse(data.participants);
+  const recipientId =
+    data.state === 'drawn'
+      ? JSON.parse(data.assignments)[currentParticipantId]
+      : undefined;
   return {
     code,
-    state: 'waiting',
+    state: data.state as RoomView['state'],
+    ...(recipientId
+      ? { recipient: participants.find((p) => p.id === recipientId)! }
+      : {}),
     expiresAt: Number(data.expiresAt),
     capacity: Number(data.capacity),
     lifetimeDays: Number(data.lifetimeDays),
     ownerId: data.ownerId,
     currentParticipantId,
     isOwner: data.ownerId === currentParticipantId,
-    participants: JSON.parse(data.participants),
+    participants,
   };
 }
 
@@ -248,4 +263,79 @@ export async function joinRoom(
     credential: access,
     joined: result === 'joined',
   };
+}
+
+// Ownership, original expiry, state and roster are checked together before the
+// only write. A concurrent saved draw wins even if this proposal became stale.
+const drawScript = `
+local expiresAt = redis.call('HGET', KEYS[1], 'expiresAt')
+local time = redis.call('TIME')
+local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
+if not expiresAt or tonumber(expiresAt) <= now then return 'unavailable' end
+local credentials = cjson.decode(redis.call('HGET', KEYS[1], 'credentials'))
+local participant = credentials[ARGV[1]]
+if not participant then return 'invalid_identity' end
+if participant ~= redis.call('HGET', KEYS[1], 'ownerId') then return 'owner_only' end
+if redis.call('HGET', KEYS[1], 'state') == 'drawn' then return 'saved' end
+if expiresAt ~= ARGV[2] then return 'unavailable' end
+if redis.call('HGET', KEYS[1], 'rosterVersion') ~= ARGV[3] then return 'roster_changed' end
+local participants = cjson.decode(redis.call('HGET', KEYS[1], 'participants'))
+if #participants < 3 then return 'insufficient_membership' end
+redis.call('HSET', KEYS[1], 'state', 'drawn', 'assignments', ARGV[4])
+return 'saved'
+`;
+
+const ownerOnly = () =>
+  new RoomError('owner_only', 403, 'Only the room owner can draw names.');
+const insufficientMembership = () =>
+  new RoomError(
+    'insufficient_membership',
+    409,
+    'A draw needs at least three participants.',
+  );
+
+export async function drawRoom(
+  code: string,
+  credential?: string,
+): Promise<RoomView> {
+  const redis = await roomRedis();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { data, currentParticipantId } = await authorizedRoom(
+      code,
+      credential,
+    );
+    if (data.ownerId !== currentParticipantId) throw ownerOnly();
+    if (data.state === 'drawn') return readRoom(code, credential);
+    const participants: RoomView['participants'] = JSON.parse(
+      data.participants,
+    );
+    if (participants.length < 3) throw insufficientMembership();
+    const assignments = generateDraw(participants.map((p) => p.id));
+    const result = await redis.eval(drawScript, {
+      keys: [`room:${code}`],
+      arguments: [
+        hash(credential ?? ''),
+        data.expiresAt,
+        data.rosterVersion,
+        JSON.stringify(assignments),
+      ],
+    });
+    if (result === 'saved') return readRoom(code, credential);
+    if (result === 'roster_changed') continue;
+    if (result === 'unavailable') throw unavailable();
+    if (result === 'invalid_identity')
+      throw new RoomError(
+        'invalid_identity',
+        401,
+        'Your saved access is missing or invalid. Your name and room code cannot recover it.',
+      );
+    if (result === 'owner_only') throw ownerOnly();
+    if (result === 'insufficient_membership') throw insufficientMembership();
+    throw new Error('Unexpected draw response');
+  }
+  throw new RoomError(
+    'roster_changed',
+    409,
+    'The participant list changed. Check everyone is here and try again.',
+  );
 }
