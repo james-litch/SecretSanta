@@ -144,7 +144,9 @@ async function authorizedRoom(code: string, credential?: string) {
     throw new RoomError(
       'invalid_identity',
       401,
-      'Your saved access is missing or invalid. Your name and room code cannot recover it.',
+      !credential && data.state === 'drawn'
+        ? 'This room has already drawn. Open it in the browser you used to join.'
+        : 'Your saved access is missing or invalid. Your name and room code cannot recover it.',
     );
   return { data, currentParticipantId: entry[1] };
 }
@@ -283,6 +285,15 @@ redis.call('HSET', KEYS[1], 'state', 'drawn', 'assignments', ARGV[4])
 return 'saved'
 `;
 
+const ownerOnly = () =>
+  new RoomError('owner_only', 403, 'Only the room owner can draw names.');
+const insufficientMembership = () =>
+  new RoomError(
+    'insufficient_membership',
+    409,
+    'A draw needs at least three participants.',
+  );
+
 export async function drawRoom(
   code: string,
   credential?: string,
@@ -293,22 +304,12 @@ export async function drawRoom(
       code,
       credential,
     );
-    if (data.ownerId !== currentParticipantId)
-      throw new RoomError(
-        'owner_only',
-        403,
-        'Only the room owner can draw names.',
-      );
+    if (data.ownerId !== currentParticipantId) throw ownerOnly();
     if (data.state === 'drawn') return readRoom(code, credential);
     const participants: RoomView['participants'] = JSON.parse(
       data.participants,
     );
-    if (participants.length < 3)
-      throw new RoomError(
-        'insufficient_membership',
-        409,
-        'A draw needs at least three participants.',
-      );
+    if (participants.length < 3) throw insufficientMembership();
     const assignments = generateDraw(participants.map((p) => p.id));
     const result = await redis.eval(drawScript, {
       keys: [`room:${code}`],
@@ -328,18 +329,8 @@ export async function drawRoom(
         401,
         'Your saved access is missing or invalid. Your name and room code cannot recover it.',
       );
-    if (result === 'owner_only')
-      throw new RoomError(
-        'owner_only',
-        403,
-        'Only the room owner can draw names.',
-      );
-    if (result === 'insufficient_membership')
-      throw new RoomError(
-        'insufficient_membership',
-        409,
-        'A draw needs at least three participants.',
-      );
+    if (result === 'owner_only') throw ownerOnly();
+    if (result === 'insufficient_membership') throw insufficientMembership();
     throw new Error('Unexpected draw response');
   }
   throw new RoomError(

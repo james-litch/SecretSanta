@@ -184,16 +184,19 @@ it('preserves the original Redis deadline and cannot draw or recover after expir
   try {
     const { room, members } = await setup();
     const key = `room:${room.code}`;
-    await drawing(room.code, members[0].cookie);
-    expect(await redis.pExpireTime(key)).toBe(room.expiresAt);
-    await redis.hSet(key, 'expiresAt', String(Date.now() - 1));
+    // Shorten the fixture TTL, then observe expiry only through public operations.
+    await redis.pExpire(key, 200);
+    expect(
+      await (await drawing(room.code, members[0].cookie)).json(),
+    ).toMatchObject({ state: 'drawn', expiresAt: room.expiresAt });
+    await new Promise((resolve) => setTimeout(resolve, 250));
     for (const member of members) {
       expect((await reading(room.code, member.cookie)).status).toBe(404);
       expect((await drawing(room.code, member.cookie)).status).toBe(404);
     }
     await redis.del(key);
     expect((await drawing(room.code, members[0].cookie)).status).toBe(404);
-    expect(await redis.exists(key)).toBe(0);
+    expect((await reading(room.code, members[0].cookie)).status).toBe(404);
   } finally {
     await redis.quit();
   }
@@ -213,9 +216,31 @@ it('checks expiry at atomic commit even when Redis delays the write', async () =
     expect(
       await (await drawing(room.code, members[0].cookie)).json(),
     ).toMatchObject({ error: 'unavailable' });
-    expect(await redis.hGet(key, 'state')).toBe('waiting');
-    expect(await redis.hGet(key, 'assignments')).toBeNull();
+    // Restore only the fixture deadline so the public view can demonstrate that
+    // the rejected commit did not save a result.
+    await redis.hSet(key, 'expiresAt', String(room.expiresAt));
+    const view = await (await reading(room.code, members[0].cookie)).json();
+    expect(view.state).toBe('waiting');
+    expect(view).not.toHaveProperty('recipient');
   } finally {
     await redis.quit();
   }
+});
+
+it('explains a drawn room to a browser with no saved access without disclosing membership', async () => {
+  const { room, members } = await setup();
+  await drawing(room.code, members[0].cookie);
+  const missing = await reading(room.code, '');
+  expect(missing.status).toBe(401);
+  expect(missing.headers.get('cache-control')).toBe('private, no-store');
+  expect(await missing.json()).toEqual({
+    error: 'invalid_identity',
+    message:
+      'This room has already drawn. Open it in the browser you used to join.',
+  });
+  expect(await (await reading(room.code, 'room_access=wrong')).json()).toEqual({
+    error: 'invalid_identity',
+    message:
+      'Your saved access is missing or invalid. Your name and room code cannot recover it.',
+  });
 });
