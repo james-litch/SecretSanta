@@ -72,8 +72,9 @@ function Room() {
         ))}
       </ul>
       <p className="mb-4 mt-2.5 text-sm text-green-muted">
-        Your room is ready. Joining and drawing will be available in a later
-        update. A draw needs at least three participants.
+        {room.isOwner
+          ? 'Share your room code to invite your group. A draw needs at least three participants. Drawing will be available in a later update.'
+          : 'Waiting for the room owner to draw.'}
       </p>
       <Divider />
       <p className="mx-auto mb-4 max-w-lg text-sm text-green-muted">

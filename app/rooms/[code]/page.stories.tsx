@@ -113,3 +113,28 @@ export const LoadedConnectionFailure: Story = {
     await expect(canvas.getByText('You · Room owner')).toBeVisible();
   },
 };
+
+export const Participant: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`/api/rooms/${room.code}`, () =>
+          HttpResponse.json({
+            ...room,
+            currentParticipantId: 'sam',
+            isOwner: false,
+            participants: [...room.participants, { id: 'sam', name: 'Sam' }],
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      await canvas.findByText('Waiting for the room owner to draw.'),
+    ).toBeVisible();
+    await expect(canvas.getByText('2 participants · up to 12')).toBeVisible();
+    await expect(canvas.getByText('Room owner', { exact: true })).toBeVisible();
+  },
+};

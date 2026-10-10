@@ -161,3 +161,91 @@ export async function readRoom(
     participants: JSON.parse(data.participants),
   };
 }
+
+// Existing identity and successful retries win before new-membership checks.
+// All writes are last; HSET preserves the room's original Redis deadline.
+const joinScript = `
+local expiresAt = redis.call('HGET', KEYS[1], 'expiresAt')
+if not expiresAt or tonumber(expiresAt) <= tonumber(ARGV[1]) then return 'unavailable' end
+local credentials = cjson.decode(redis.call('HGET', KEYS[1], 'credentials'))
+if credentials[ARGV[2]] then return 'existing' end
+local retry = redis.call('HGET', KEYS[1], 'join:' .. ARGV[3])
+if retry then
+  retry = cjson.decode(retry)
+  if retry.payload ~= ARGV[4] then return 'operation_conflict' end
+  if retry.expiresAt <= tonumber(ARGV[1]) then return 'invalid_operation' end
+  return 'recovered'
+end
+if redis.call('HGET', KEYS[1], 'state') ~= 'waiting' then return 'joining_closed' end
+local participants = cjson.decode(redis.call('HGET', KEYS[1], 'participants'))
+if #participants >= tonumber(redis.call('HGET', KEYS[1], 'capacity')) then return 'room_full' end
+local names = cjson.decode(redis.call('HGET', KEYS[1], 'names'))
+if names[ARGV[5]] then return 'duplicate_name' end
+local version = tonumber(redis.call('HGET', KEYS[1], 'rosterVersion'))
+table.insert(participants, {id=ARGV[6], name=ARGV[7]})
+credentials[ARGV[8]] = ARGV[6]
+names[ARGV[5]] = ARGV[6]
+redis.call('HSET', KEYS[1], 'participants', cjson.encode(participants),
+  'credentials', cjson.encode(credentials), 'names', cjson.encode(names),
+  'rosterVersion', tostring(version + 1), 'join:' .. ARGV[3],
+  cjson.encode({payload=ARGV[4], expiresAt=tonumber(ARGV[9])}))
+return 'joined'
+`;
+
+export async function joinRoom(
+  code: string,
+  operation: PendingCreate,
+  savedCredential?: string,
+) {
+  const name = normalizeName(operation.name);
+  if (!/^[A-F0-9]{24}$/.test(code))
+    throw new RoomError(
+      'invalid_code',
+      400,
+      'Enter the complete room code shared with you.',
+    );
+  if (!/^[a-f0-9]{64}$/.test(operation.secret))
+    throw new RoomError(
+      'invalid_operation',
+      400,
+      'This join attempt is invalid.',
+    );
+  const now = Date.now();
+  const credential = hash(`join-credential:${code}:${operation.secret}`);
+  const redis = await roomRedis();
+  const result = await redis.eval(joinScript, {
+    keys: [`room:${code}`],
+    arguments: [
+      String(now),
+      hash(savedCredential ?? ''),
+      hash(operation.secret),
+      hash(name.display),
+      name.key,
+      randomUUID(),
+      name.display,
+      hash(credential),
+      String(now + operationLifetime),
+    ],
+  });
+  if (result === 'unavailable') throw unavailable();
+  const failures: Record<string, string> = {
+    joining_closed:
+      'This room has already drawn. Open it in the browser you used to join.',
+    room_full:
+      'This room is full. Ask your group to start a new room if someone is missing.',
+    duplicate_name:
+      'Someone in this room already uses that name. Choose a distinguishable name.',
+    operation_conflict:
+      'This join attempt cannot be reused with a different name.',
+    invalid_operation:
+      'This join attempt has expired. Your name and room code cannot recover access.',
+  };
+  if (typeof result === 'string' && failures[result])
+    throw new RoomError(result, 409, failures[result]);
+  const access = result === 'existing' ? savedCredential! : credential;
+  return {
+    room: await readRoom(code, access),
+    credential: access,
+    joined: result === 'joined',
+  };
+}
