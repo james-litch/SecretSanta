@@ -1,13 +1,15 @@
 'use client';
-import { Suspense } from 'react';
-import { useParams } from 'next/navigation';
 import { Button } from '@/components/Button/Button';
-import { SystemMessage } from '@/components/SystemMessage/SystemMessage';
 import { Divider } from '@/components/Divider/Divider';
+import { Modal } from '@/components/Modal/Modal';
 import { RoomCodeShareCard } from '@/components/RoomCodeShareCard/RoomCodeShareCard';
+import { SystemMessage } from '@/components/SystemMessage/SystemMessage';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { useRoom } from '@/hooks/useRoom';
 import { lifetimeCopy } from '@/lib/rooms/rules';
+import { useParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { BuyingFor } from './BuyingFor';
 import { RoomLoading } from './RoomLoading';
 import { RoomUnavailable } from './RoomUnavailable';
 
@@ -21,7 +23,12 @@ export default function RoomPage() {
 
 function Room() {
   const { code } = useParams<{ code: string }>();
-  const { room, error, terminal, busy, load } = useRoom(code);
+  return <RoomContent key={code} code={code} />;
+}
+
+function RoomContent({ code }: { code: string }) {
+  const { room, error, terminal, busy, load, draw, retry, offline, uncertain } =
+    useRoom(code);
   const headingProps = useAutoFocus<HTMLHeadingElement>();
 
   if (!room && terminal) return <RoomUnavailable error={error} />;
@@ -29,18 +36,23 @@ function Room() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-14 text-center max-md:pt-10">
       <h1
+        key={room.state}
         className="mb-5 font-display text-fl-xl font-normal tracking-tight text-balance focus:outline-none"
         {...headingProps}
       >
-        Your room
+        {room.state === 'drawn' ? 'Your gift recipient' : 'Your room'}
       </h1>
-      <p className="mb-4 text-green-muted">
-        A little gathering. A lovely surprise.
-      </p>
+      {room.state === 'drawn' && room.recipient ? (
+        <BuyingFor name={room.recipient?.name} />
+      ) : (
+        <p className="mb-4 text-green-muted">
+          A little gathering. A lovely surprise.
+        </p>
+      )}
       {error && (
         <SystemMessage className="my-4" role="alert">
           <p className="mb-4">{error}</p>
-          <Button disabled={busy} onClick={load}>
+          <Button disabled={busy || offline} onClick={retry}>
             {busy ? 'Checking…' : 'Try again'}
           </Button>
         </SystemMessage>
@@ -71,11 +83,51 @@ function Room() {
           </li>
         ))}
       </ul>
-      <p className="mb-4 mt-2.5 text-sm text-green-muted">
-        {room.isOwner
-          ? 'Share your room code to invite your group. A draw needs at least three participants. Drawing will be available in a later update.'
-          : 'Waiting for the room owner to draw.'}
-      </p>
+      {room.state === 'waiting' &&
+        (room.isOwner ? (
+          !uncertain && (
+            <>
+              <Button
+                className="w-full"
+                disabled={room.participants.length < 3 || busy || offline}
+                aria-describedby="draw-minimum"
+                command="show-modal"
+                commandFor="draw-confirmation"
+              >
+                Draw names
+              </Button>
+              <p
+                id="draw-minimum"
+                className="mb-4 mt-3 text-sm text-green-muted"
+              >
+                A draw needs at least three participants.
+              </p>
+              <Modal
+                id="draw-confirmation"
+                title="Draw names?"
+                aria-describedby="draw-description"
+              >
+                <p id="draw-description" className="mb-6">
+                  Everyone here? Drawing closes joining and can’t be undone.
+                </p>
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button
+                    disabled={busy || offline}
+                    command="close"
+                    commandFor="draw-confirmation"
+                    onClick={draw}
+                  >
+                    Confirm draw
+                  </Button>
+                </div>
+              </Modal>
+            </>
+          )
+        ) : (
+          <p className="mb-4 mt-2.5 text-sm text-green-muted">
+            Waiting for the room owner to draw.
+          </p>
+        ))}
       <Divider />
       <p className="mx-auto mb-4 max-w-lg text-sm text-green-muted">
         Return using this same browser. Clearing its saved data loses your

@@ -1,0 +1,58 @@
+.modal {
+  opacity: 0;
+  background-color: var(--color-cream-light);
+  border: 1px solid var(--color-cream-dark);
+  padding: --spacing(6);
+  transform: translateY(--spacing(4));
+  inset-inline: 0;
+  top: auto;
+  bottom: 0;
+  margin: 0;
+  text-align: start;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  width: 100%;
+  max-width: var(--container-lg);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out,
+    display 180ms allow-discrete,
+    overlay 180ms allow-discrete;
+
+  &[open] {
+    opacity: 1;
+    transform: translateY(0);
+
+    &::backdrop {
+      opacity: 1;
+    }
+  }
+
+  &::backdrop {
+    opacity: 0;
+    background-color: --alpha(var(--color-green-muted) / 60%);
+    transition:
+      opacity 180ms ease-out,
+      display 180ms allow-discrete,
+      overlay 180ms allow-discrete;
+  }
+}
+
+@media (width >= --theme(--breakpoint-sm)) {
+  .modal {
+    margin: auto;
+    width: auto;
+    top: 0;
+    border-radius: var(--radius-lg);
+  }
+}
+
+@starting-style {
+  .modal[open] {
+    opacity: 0;
+    transform: translateY(calc(var(--spacing) * 4));
+
+    &::backdrop {
+      opacity: 0;
+    }
+  }
+}

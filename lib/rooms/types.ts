@@ -1,6 +1,7 @@
 export type RoomView = {
   code: string;
-  state: 'waiting';
+  state: 'waiting' | 'drawn';
+  recipient?: { id: string; name: string };
   expiresAt: number;
   capacity: number;
   lifetimeDays: number;

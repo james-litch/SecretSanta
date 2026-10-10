@@ -106,6 +106,7 @@ export const LoadedConnectionFailure: Story = {
       'last confirmed earlier',
     );
     await expect(canvas.getByText('You · Room owner')).toBeVisible();
+    window.dispatchEvent(new Event('online'));
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await waitFor(() =>
       expect(canvas.queryByRole('alert')).not.toBeInTheDocument(),
@@ -136,5 +137,99 @@ export const Participant: Story = {
     ).toBeVisible();
     await expect(canvas.getByText('2 participants · up to 12')).toBeVisible();
     await expect(canvas.getByText('Room owner', { exact: true })).toBeVisible();
+  },
+};
+
+const readyRoom = {
+  ...room,
+  participants: [
+    ...room.participants,
+    { id: 'sam', name: 'Sam' },
+    { id: 'alex', name: 'Alex' },
+  ],
+};
+export const ConfirmDraw: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`/api/rooms/${room.code}`, () => HttpResponse.json(readyRoom)),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole('button', { name: 'Draw names' });
+    await userEvent.click(trigger);
+    const dialog = await canvas.findByRole('dialog', { name: 'Draw names?' });
+    await waitFor(() => expect(dialog).toBeVisible());
+    await expect(
+      within(dialog).getByRole('button', { name: 'Close modal' }),
+    ).toHaveFocus();
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Close modal' }),
+    );
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.click(trigger);
+  },
+};
+
+export const PrivateResult: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`/api/rooms/${room.code}`, () =>
+          HttpResponse.json({
+            ...readyRoom,
+            state: 'drawn',
+            recipient: { id: 'alex', name: 'Alex' },
+          }),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heading = await canvas.findByRole('heading', {
+      name: 'Your gift recipient',
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+    await expect(
+      canvas.getByRole('region', { name: 'Your private gift recipient' }),
+    ).toHaveTextContent('Alex');
+    await expect(
+      canvas.queryByRole('button', { name: 'Draw names' }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole('list', { name: 'Participants' }),
+    ).toBeVisible();
+  },
+};
+
+export const UncertainDraw: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`/api/rooms/${room.code}`, () => HttpResponse.json(readyRoom)),
+        http.post(`/api/rooms/${room.code}/draw`, () => HttpResponse.error()),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      await canvas.findByRole('button', { name: 'Draw names' }),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Confirm draw' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('alert')).toHaveTextContent(
+        'No saved draw was found yet',
+      ),
+    );
+    await expect(
+      canvas.getByRole('button', { name: 'Try again' }),
+    ).toBeEnabled();
+    await expect(
+      canvas.getByRole('list', { name: 'Participants' }),
+    ).toBeVisible();
   },
 };

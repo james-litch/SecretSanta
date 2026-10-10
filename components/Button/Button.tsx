@@ -9,8 +9,22 @@ const Variants = {
 
 interface Props extends ComponentProps<'button'> {
   variant?: keyof typeof Variants;
+  command?: 'show-modal' | 'close' | 'request-close';
+  commandFor?: string;
 }
 
-export function Button({ variant = 'primary', className, ...props }: Props) {
-  return <button {...props} className={clsx(Variants[variant], className)} />;
+export function Button({
+  variant = 'primary',
+  className,
+  command,
+  commandFor,
+  ...props
+}: Props) {
+  return (
+    <button
+      {...props}
+      {...{ command, commandfor: commandFor }}
+      className={clsx(Variants[variant], className)}
+    />
+  );
 }
