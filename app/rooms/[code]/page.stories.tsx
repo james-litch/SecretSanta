@@ -49,6 +49,19 @@ export const Owner: Story = {
   },
 };
 export const Unavailable: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heading = await canvas.findByRole('heading', {
+      name: 'Room unavailable',
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+    await expect(
+      canvas.getByRole('link', { name: 'About room expiry' }),
+    ).toHaveAttribute('href', '/faq#expiry');
+    await expect(
+      canvas.getByRole('link', { name: 'Back to the landing page' }),
+    ).toHaveAttribute('href', '/');
+  },
   parameters: {
     msw: {
       handlers: [
@@ -63,6 +76,45 @@ export const Unavailable: Story = {
         ),
       ],
     },
+  },
+};
+export const MissingAccessAfterDraw: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`/api/rooms/${room.code}`, () =>
+          HttpResponse.json(
+            {
+              error: 'invalid_identity',
+              message:
+                'This room has already drawn. Open it in the browser you used to join.',
+            },
+            { status: 401 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heading = await canvas.findByRole('heading', {
+      name: 'Room unavailable',
+    });
+    await waitFor(() => expect(heading).toHaveFocus());
+    await expect(
+      canvas.getByText(
+        'This room has already drawn. Open it in the browser you used to join.',
+      ),
+    ).toBeVisible();
+    await expect(
+      canvas.queryByRole('list', { name: 'Participants' }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.queryByRole('region', { name: 'Your private gift recipient' }),
+    ).not.toBeInTheDocument();
+    await expect(
+      canvas.getByRole('link', { name: 'About lost owner access' }),
+    ).toHaveAttribute('href', '/faq#owner');
   },
 };
 export const InvalidAccess: Story = {

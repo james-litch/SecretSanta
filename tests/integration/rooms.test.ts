@@ -5,6 +5,8 @@ import { createClient } from 'redis';
 import { NextRequest } from 'next/server';
 import { POST } from '../../app/api/rooms/route';
 import { GET } from '../../app/api/rooms/[code]/route';
+import { POST as join } from '../../app/api/rooms/[code]/join/route';
+import { POST as draw } from '../../app/api/rooms/[code]/draw/route';
 
 process.env.REDIS_URL = 'redis://127.0.0.1:6380';
 const redis = createClient({ url: process.env.REDIS_URL });
@@ -256,4 +258,71 @@ it('retries an uncommitted reservation without requiring another preparation', a
   const recovered = await create(operation);
   expect(recovered.status).toBe(200);
   expect(await recovered.json()).toEqual(room);
+});
+
+it('snapshots lifetime and capacity across later configuration, joins, drawing, recovery and revisits', async () => {
+  process.env.ROOM_MAX_PARTICIPANTS = '3';
+  process.env.ROOM_LIFETIME_DAYS = '2';
+  try {
+    const operation = await pending('Owner');
+    const response = await create(operation);
+    const original = await response.json();
+    expect(original).toMatchObject({ capacity: 3, lifetimeDays: 2 });
+    const cookie = cookieFrom(response);
+    const context = { params: Promise.resolve({ code: original.code }) };
+    const joining = (name: string) =>
+      join(
+        new NextRequest(`${origin}/api/rooms/${original.code}/join`, {
+          method: 'POST',
+          headers: { origin, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            secret: randomBytes(32).toString('hex'),
+          }),
+        }),
+        context,
+      );
+    process.env.ROOM_MAX_PARTICIPANTS = '10';
+    process.env.ROOM_LIFETIME_DAYS = '1';
+    const snapshot = {
+      expiresAt: original.expiresAt,
+      capacity: 3,
+      lifetimeDays: 2,
+    };
+    for (const name of ['Sam', 'Alex']) {
+      const joined = await joining(name);
+      expect(await joined.json()).toMatchObject(snapshot);
+      expect(joined.headers.get('set-cookie')).toContain(
+        new Date(original.expiresAt).toUTCString(),
+      );
+    }
+    expect(await (await joining('Too many')).json()).toMatchObject({
+      error: 'room_full',
+    });
+    const drawn = await draw(
+      new NextRequest(`${origin}/api/rooms/${original.code}/draw`, {
+        method: 'POST',
+        headers: { origin, cookie },
+      }),
+      context,
+    );
+    expect(await drawn.json()).toMatchObject({ ...snapshot, state: 'drawn' });
+    const recovered = await create(operation);
+    expect(await recovered.json()).toMatchObject({
+      ...snapshot,
+      state: 'drawn',
+    });
+    expect(recovered.headers.get('set-cookie')).toContain(
+      new Date(original.expiresAt).toUTCString(),
+    );
+    expect(await (await read(original.code, cookie)).json()).toMatchObject({
+      ...snapshot,
+      state: 'drawn',
+    });
+    const next = await create(await pending('New owner'));
+    expect(await next.json()).toMatchObject({ capacity: 10, lifetimeDays: 1 });
+  } finally {
+    delete process.env.ROOM_MAX_PARTICIPANTS;
+    delete process.env.ROOM_LIFETIME_DAYS;
+  }
 });

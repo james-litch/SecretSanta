@@ -41,7 +41,8 @@ function RoomContent({ code }: { code: string }) {
   } = useRoom(code);
   const headingProps = useAutoFocus<HTMLHeadingElement>();
 
-  if (!room && terminal) return <RoomUnavailable error={error} />;
+  if (!room && terminal)
+    return <RoomUnavailable error={error} reason={terminal} />;
   if (!room) return <RoomLoading error={error} busy={busy} load={load} />;
   return (
     <main className="mx-auto max-w-2xl px-6 py-14 text-center max-md:pt-10">
