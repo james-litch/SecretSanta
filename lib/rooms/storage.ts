@@ -58,15 +58,17 @@ export async function prepareCreate(name: string): Promise<PendingCreate> {
 // All preconditions precede writes. Retrying a commit is the same operation as
 // the original request; only server-owned state decides whether to create.
 const createScript = `
+local time = redis.call('TIME')
+local now = math.max(tonumber(ARGV[3]), tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000))
 local existing = redis.call('HGET', KEYS[1], 'operationHash')
 if not existing then return 'unavailable' end
 if existing ~= ARGV[1] then return 'collision' end
 if redis.call('HGET', KEYS[1], 'payloadHash') ~= ARGV[2] then return 'payload_mismatch' end
 local operationExpiresAt = redis.call('HGET', KEYS[1], 'operationExpiresAt')
-if not operationExpiresAt or tonumber(operationExpiresAt) <= tonumber(ARGV[3]) then return 'invalid_operation' end
+if not operationExpiresAt or tonumber(operationExpiresAt) <= now then return 'invalid_operation' end
 local expiresAt = redis.call('HGET', KEYS[1], 'expiresAt')
 if expiresAt then
-  if tonumber(expiresAt) <= tonumber(ARGV[3]) then return 'unavailable' end
+  if tonumber(expiresAt) <= now then return 'unavailable' end
   return 'recovered'
 end
 redis.call('HSET', KEYS[1],
@@ -114,7 +116,7 @@ export async function createRoom(operation: PendingCreate) {
     throw new RoomError(
       'invalid_operation',
       400,
-      'This create attempt has expired. Abandon this attempt to start a new room.',
+      'This create attempt has expired. If it completed, that room remains until it expires. Creating again starts a separate room.',
     );
   if (result === 'collision' || result === 'payload_mismatch')
     throw new RoomError(
@@ -180,15 +182,17 @@ export async function readRoom(
 // Existing identity and successful retries win before new-membership checks.
 // All writes are last; HSET preserves the room's original Redis deadline.
 const joinScript = `
+local time = redis.call('TIME')
+local now = math.max(tonumber(ARGV[1]), tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000))
 local expiresAt = redis.call('HGET', KEYS[1], 'expiresAt')
-if not expiresAt or tonumber(expiresAt) <= tonumber(ARGV[1]) then return 'unavailable' end
+if not expiresAt or tonumber(expiresAt) <= now then return 'unavailable' end
 local credentials = cjson.decode(redis.call('HGET', KEYS[1], 'credentials'))
 if credentials[ARGV[2]] then return 'existing' end
 local retry = redis.call('HGET', KEYS[1], 'join:' .. ARGV[3])
 if retry then
   retry = cjson.decode(retry)
   if retry.payload ~= ARGV[4] then return 'operation_conflict' end
-  if retry.expiresAt <= tonumber(ARGV[1]) then return 'invalid_operation' end
+  if retry.expiresAt <= now then return 'invalid_operation' end
   return 'recovered'
 end
 if redis.call('HGET', KEYS[1], 'state') ~= 'waiting' then return 'joining_closed' end

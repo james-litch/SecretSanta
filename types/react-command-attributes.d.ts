@@ -5,6 +5,6 @@ declare module 'react' {
 
   interface ButtonHTMLAttributes {
     command?: StandardCommand | `--${string}`;
-    commandFor?: string;
+    commandfor?: string;
   }
 }

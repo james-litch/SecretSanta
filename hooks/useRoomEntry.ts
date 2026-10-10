@@ -128,9 +128,9 @@ export function useRoomEntry(onEntered: (code: string) => void) {
       );
       const data = await response.json();
       if (!response.ok) {
-        // Definitive join rejection made no membership; allow correction. A
-        // timeout/service failure keeps the exact operation and payload locked.
-        if (operation.code && response.status < 500) {
+        // Definitive rejection cannot recover this attempt. A timeout/service
+        // failure may follow a commit, so keep its exact identity and payload.
+        if (response.status < 500) {
           sessionStorage.removeItem(storageKey(operation));
           setPending(null);
           if (

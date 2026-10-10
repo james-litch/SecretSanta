@@ -190,9 +190,27 @@ it('expired recovery cannot extend a live room or its operation window', async (
   const room = await created.json();
   const key = keyFor(operation);
   const deadline = await redis.pExpireTime(key);
-  await redis.hSet(key, 'operationExpiresAt', String(Date.now() - 1));
+  await redis.hSet(key, 'operationExpiresAt', '1');
   expect((await create(operation)).status).toBe(400);
   expect(await redis.pExpireTime(key)).toBe(deadline);
+  expect(await (await read(room.code, cookieFrom(created))).json()).toEqual(
+    room,
+  );
+});
+
+it('rejects recovery when its operation expires while Redis delays the request', async () => {
+  const operation = await pending();
+  const created = await create(operation);
+  const room = await created.json();
+  await redis.hSet(
+    keyFor(operation),
+    'operationExpiresAt',
+    String(Date.now() + 150),
+  );
+  await redis.sendCommand(['CLIENT', 'PAUSE', '300', 'WRITE']);
+  const response = await create(operation);
+  expect(await response.json()).toMatchObject({ error: 'invalid_operation' });
+  expect(response.headers.get('set-cookie')).toBeNull();
   expect(await (await read(room.code, cookieFrom(created))).json()).toEqual(
     room,
   );

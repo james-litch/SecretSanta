@@ -60,6 +60,9 @@ test('lost create response recovers the same operation after refresh', async ({
     originalBody = route.request().postData()!;
     const response = await route.fetch();
     committedCode = (await response.json()).code;
+    // route.fetch can apply Set-Cookie even though the response is aborted.
+    // Drop it explicitly to exercise recovery using only the pending secret.
+    await page.context().clearCookies();
     await route.abort('failed');
     await page.unroute('**/api/rooms');
   });
@@ -77,6 +80,12 @@ test('lost create response recovers the same operation after refresh', async ({
   await expect(page.getByRole('main').getByLabel('Room code')).toHaveText(
     committedCode,
   );
+  await expect(page.getByText('1 participant · up to 12')).toBeVisible();
+  expect(
+    (await page.context().cookies()).some(
+      (cookie) => cookie.name === 'room_access',
+    ),
+  ).toBe(true);
   expect(
     await page.evaluate(() =>
       sessionStorage.getItem('secret-santa:pending-create'),

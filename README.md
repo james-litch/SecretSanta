@@ -1,6 +1,6 @@
 # Secret Santa
 
-A private gift exchange for friends and family. This implements room creation, joining from separate browsers, private participant access and code sharing ([#12](https://github.com/james-litch/SecretSanta/issues/12), [#13](https://github.com/james-litch/SecretSanta/issues/13)). Owners can confirm one fair draw and every participant can read their private saved recipient ([#14](https://github.com/james-litch/SecretSanta/issues/14)). Automatic room polling and broader automatic create/join recovery belong to later slices.
+A private gift exchange for friends and family. This implements room creation, joining from separate browsers, private participant access and code sharing ([#12](https://github.com/james-litch/SecretSanta/issues/12), [#13](https://github.com/james-litch/SecretSanta/issues/13)). Owners can confirm one fair draw and every participant can read their private saved recipient ([#14](https://github.com/james-litch/SecretSanta/issues/14)). Create/join retries recover the original operation after a lost response or cookie ([#15](https://github.com/james-litch/SecretSanta/issues/15)). Automatic room polling belongs to a later slice.
 
 ## Local development
 
@@ -67,7 +67,7 @@ Browser tests cover separate-browser joining with an offline owner, repeated joi
 - The browser saves that operation in tab session storage before submitting `{ name, secret }` to the same endpoint. The server atomically turns an existing reservation into a room, or recovers an existing room. Original requests and retries use identical bodies: no client timestamp or retry flag controls creation. Losing the reservation/room key makes every commit return unavailable, including a delayed duplicate original request. Expired recovery never extends room lifetime.
 - Domain-separated SHA-256 derives a stable 96-bit candidate code and private credential from the operation secret. The scripts bind the operation to its normalized name, reject candidate collisions without overwriting, and store only hashes of secrets and credentials. Pending secrets are discarded from both session storage and React state after success, so returning home permits a fresh creation. Abandoning an uncertain attempt explicitly starts a separate operation and may leave the first room to expire. Pending operations from the earlier browser-generated protocol cannot recover through this new protocol; abandon them and start again. Existing room cookies and reads remain valid.
 - POST `/api/rooms/:code/join` accepts a name and a browser-generated random 256-bit operation secret. The browser saves the exact operation and room code before sending. One atomic script checks expiry, existing identity, retry binding, waiting state, snapshotted capacity and normalized-name uniqueness before adding membership and advancing the roster version. Hash updates preserve the deadline. Retry records store only hashes, and committed joins can be recovered for 15 minutes even after the room fills or closes joining. Credentials are domain-separated by room and operation. No membership removal or identity switching is exposed.
-- An uncertain join locks both inputs and disables creation; **Try again** resends the same operation, including after refreshing the landing page. A definitive rejection allows correction. Success discards the pending secret. Automatic reconciliation is deferred to the response-loss recovery slice. Join responses expose the private room projection and set the room-scoped cookie; no credentials or retry secrets appear in response bodies.
+- An uncertain join locks both inputs and disables creation; **Try again** resends the same operation, including after refreshing the landing page. A definitive rejection allows correction. Success discards the pending secret. Recovery is user-triggered through **Try again**, including after the room fills or draws. Join responses expose the private room projection and set the room-scoped cookie; no credentials or retry secrets appear in response bodies.
 - GET `/api/rooms/:code` requires its room-scoped HttpOnly, SameSite=Lax cookie. The response contains only the current participant’s allowed view. Every handled API outcome is `private, no-store`; secrets are never in URLs or logs. Pages contain a public shell and load membership only through the authenticated endpoint.
 - The Node Redis client is reused per server instance, disables offline command queuing, bounds connection retries and command waiting, and sanitizes service failures. A timeout may follow a committed write, so the browser retains the original attempt.
 
@@ -91,3 +91,17 @@ npm run test:browser -- tests/browser/draw.spec.ts
 ```
 
 These verify assignment invariants/reciprocal pairs, real Redis competing draws and join races, owner authorization, private response shapes, fixed expiry, recovery after drawing, separate-browser recipients/revisits, competing owner tabs, response loss before and after commit, offline submission prevention, result expiry, and confirmation/result accessibility. Polling and hosted verification remain separate slices.
+
+## Lost create/join response verification
+
+Pending create/join operations retain their exact name, target and secret across a refresh in the same tab. **Try again** can reissue a lost identity cookie for 15 minutes without creating another room or participant. Recovery checks expiry inside the atomic Redis script as well as at request time; a request delayed past its deadline cannot recover access. It preserves the room deadline and any saved draw. A definitive failure releases the inputs and reports its reason; an expired create attempt explicitly explains that creating again starts a separate room. Network and service failures retain the pending operation because the write may have committed. Browser data loss still loses access.
+
+After starting disposable Redis, run:
+
+```sh
+npm run test:integration -- tests/integration/rooms.test.ts tests/integration/join.test.ts
+npm run test:browser -- tests/browser/create.spec.ts tests/browser/join.spec.ts tests/browser/recovery.spec.ts
+npm run test:storybook -- 'app/(home)/page.stories.tsx'
+```
+
+The browser tests deliberately drop both the post-commit response and cookie, reload the landing page, and recover the same identity. Full and drawn room journeys verify unchanged membership, expiry and saved results, authenticated revisits, offline retry prevention and pending-secret removal. Integration tests additionally verify payload binding, secret/credential privacy, concurrent retry convergence, early storage loss, and expiry while Redis delays a request. These commands need no cloud credentials; the full verification commands above remain the completion check.
