@@ -20,6 +20,7 @@ const meta = {
       bfcacheId: 'home-story',
     });
     sessionStorage.removeItem('secret-santa:pending-create');
+    sessionStorage.removeItem('secret-santa:pending-join');
   },
 } satisfies Meta<typeof Home>;
 export default meta;
@@ -107,5 +108,78 @@ export const ServiceFailure: Story = {
       'Try again',
     );
     await expect(canvas.getByLabelText('Your name')).toHaveValue('James');
+  },
+};
+
+export const JoinValidation: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Join room' }));
+    await expect(canvas.getByLabelText('Your name')).toHaveFocus();
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Sam');
+    await userEvent.click(canvas.getByRole('button', { name: 'Join room' }));
+    await expect(canvas.getByLabelText('Room code')).toHaveFocus();
+    await expect(canvas.getByLabelText('Room code')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+  },
+};
+export const DuplicateName: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/rooms/:code/join', () =>
+          HttpResponse.json(
+            {
+              error: 'duplicate_name',
+              message:
+                'Someone in this room already uses that name. Choose a distinguishable name.',
+            },
+            { status: 409 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Sam');
+    await userEvent.type(canvas.getByLabelText('Room code'), 'A'.repeat(24));
+    await userEvent.click(canvas.getByRole('button', { name: 'Join room' }));
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'already uses that name',
+    );
+    await expect(canvas.getByLabelText('Your name')).toHaveFocus();
+    await expect(canvas.getByLabelText('Room code')).toHaveValue(
+      'A'.repeat(24),
+    );
+  },
+};
+export const PendingJoin: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.post('/api/rooms/:code/join', async () => {
+          await delay('infinite');
+          return HttpResponse.json({});
+        }),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Sam');
+    await userEvent.type(canvas.getByLabelText('Room code'), 'A'.repeat(24));
+    await userEvent.click(canvas.getByRole('button', { name: 'Join room' }));
+    await expect(
+      canvas.getByRole('button', { name: 'Joining your room…' }),
+    ).toBeDisabled();
+    await expect(
+      canvas.getByRole('button', { name: 'Create room' }),
+    ).toBeDisabled();
+    await expect(canvas.getByLabelText('Room code')).toHaveAttribute(
+      'readonly',
+    );
   },
 };

@@ -16,9 +16,9 @@ export default function FAQ() {
       <Disclosure id="browser" question="How do I return to my room?">
         <p className="mb-4">
           Keep your room’s page address and open it in the same browser you used
-          to create it. Refreshing or opening another tab keeps your identity.
-          Clearing saved browser data loses access; your name and room code
-          cannot recover it.
+          to create or join it. Refreshing or opening another tab keeps your
+          identity. Clearing saved browser data loses access; your name and room
+          code cannot recover it.
         </p>
       </Disclosure>
       <Disclosure
@@ -46,8 +46,8 @@ export default function FAQ() {
       <Disclosure id="capacity" question="How many people can take part?">
         <p className="mb-4">
           Each room shows its participant limit, including the owner. A draw
-          requires at least three participants. Joining and drawing are coming
-          in a later update.
+          requires at least three participants. Drawing is coming in a later
+          update.
         </p>
       </Disclosure>
       <Disclosure id="expiry" question="When is the room deleted?">
@@ -59,11 +59,11 @@ export default function FAQ() {
       </Disclosure>
       <Disclosure id="connection" question="What happens if I lose connection?">
         <p className="mb-4">
-          Reconnect before submitting. If creation is uncertain, choose Try
-          again to check the same attempt with the same name. Pending attempts
-          are kept in this tab for up to 15 minutes. Abandoning an attempt can
-          leave a created room behind; it expires normally. Never clear browser
-          data to fix a connection problem.
+          Reconnect before submitting. If creating or joining is uncertain,
+          choose Try again to check the same attempt with the same name and room
+          code. Pending attempts are kept in this tab for up to 15 minutes.
+          Abandoning an attempt can leave a created room behind; it expires
+          normally. Never clear browser data to fix a connection problem.
         </p>
       </Disclosure>
       <Divider />

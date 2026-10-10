@@ -21,7 +21,10 @@ test('create, refresh, another tab and revisit retain the room owner', async ({
     page.getByText('This room will be deleted after 1 day.'),
   ).toBeVisible();
   const url = page.url();
-  const code = await page.getByLabel('Room code').textContent();
+  const code = await page
+    .getByRole('main')
+    .getByLabel('Room code')
+    .textContent();
   const roomCookie = (
     await context.cookies('http://127.0.0.1:3100/api/rooms/' + code)
   ).find((c) => c.name === 'room_access');
@@ -33,7 +36,9 @@ test('create, refresh, another tab and revisit retain the room owner', async ({
   await expect(tab.getByText('You · Room owner')).toBeVisible();
   await page.goto('/');
   await page.goto(url);
-  await expect(page.getByLabel('Room code')).toHaveText(code!);
+  await expect(page.getByRole('main').getByLabel('Room code')).toHaveText(
+    code!,
+  );
   await expect(
     page.getByText(
       'Return using this same browser. Clearing its saved data loses your access.',
@@ -69,7 +74,9 @@ test('lost create response recovers the same operation after refresh', async ({
   const request = page.waitForRequest('**/api/rooms');
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   expect((await request).postDataJSON()).toEqual(JSON.parse(originalBody));
-  await expect(page.getByLabel('Room code')).toHaveText(committedCode);
+  await expect(page.getByRole('main').getByLabel('Room code')).toHaveText(
+    committedCode,
+  );
   expect(
     await page.evaluate(() =>
       sessionStorage.getItem('secret-santa:pending-create'),
@@ -190,7 +197,7 @@ test('copy fallback and FAQ disclosures work by keyboard', async ({ page }) => {
   });
   await page.getByRole('button', { name: 'Copy', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Select and copy');
-  await expect(page.getByLabel('Room code')).toBeVisible();
+  await expect(page.getByRole('main').getByLabel('Room code')).toBeVisible();
   await page.getByRole('link', { name: 'FAQ', exact: true }).click();
   const question = page
     .locator('details')

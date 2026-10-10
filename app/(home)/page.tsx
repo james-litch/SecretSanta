@@ -1,5 +1,5 @@
 'use client';
-import { useCreateRoom } from '@/hooks/useCreateRoom';
+import { useRoomEntry } from '@/hooks/useRoomEntry';
 import { useAutoFocus } from '@/hooks/useAutoFocus';
 import { Button } from '@/components/Button/Button';
 import { FormField } from '@/components/FormField/FormField';
@@ -10,6 +10,13 @@ import { useRouter } from 'next/navigation';
 export default function Home() {
   const router = useRouter();
   const {
+    code,
+    setCode,
+    codeError,
+    setCodeError,
+    codeInput,
+    action,
+    help,
     name,
     setName,
     fieldError,
@@ -21,7 +28,7 @@ export default function Home() {
     input,
     submit,
     startOver,
-  } = useCreateRoom((code) => router.push(`/rooms/${code}`));
+  } = useRoomEntry((code) => router.push(`/rooms/${code}`));
   const headingProps = useAutoFocus<HTMLHeadingElement>();
   return (
     <main className="mx-auto grid max-w-6xl grid-cols-2 items-center gap-16 px-8 py-12 lg:py-28 max-md:grid-cols-1 max-md:gap-8 max-md:px-5 max-md:pt-10 max-md:pb-20">
@@ -41,7 +48,11 @@ export default function Home() {
       </section>
       <form
         className="rounded-lg border border-cream-dark bg-cream-light p-8 max-md:p-6"
-        onSubmit={submit}
+        onSubmit={(event) => {
+          const submitter = (event.nativeEvent as SubmitEvent)
+            .submitter as HTMLButtonElement | null;
+          void submit(event, submitter?.value === 'join' ? 'join' : 'create');
+        }}
         noValidate
         aria-busy={busy}
       >
@@ -52,37 +63,77 @@ export default function Home() {
           error={fieldError}
           ref={input}
           value={name}
-          readOnly={busy || !!pending}
+          readOnly={!online || busy || !!pending}
           autoComplete="given-name"
           onChange={(event) => {
             setName(event.target.value);
             setFieldError('');
           }}
         />
-        <Button className="w-full" disabled={busy || !online} type="submit">
-          {busy ? 'Creating your room…' : pending ? 'Try again' : 'Create room'}
+        <Button
+          className="w-full"
+          disabled={busy || !online || !!pending?.code}
+          type="submit"
+          value="create"
+        >
+          {busy && action === 'create'
+            ? 'Creating your room…'
+            : pending && !pending.code
+              ? 'Try again'
+              : 'Create room'}
+        </Button>
+        <Divider />
+        <p className="mb-4 text-center text-sm text-green-muted">or</p>
+        <FormField
+          id="code"
+          label="Room code"
+          hint="Use the code shared by your group."
+          ref={codeInput}
+          value={code}
+          error={codeError}
+          readOnly={!online || busy || !!pending}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => {
+            setCode(event.target.value);
+            setCodeError('');
+          }}
+        />
+        <Button
+          className="w-full"
+          disabled={busy || !online || (!!pending && !pending.code)}
+          type="submit"
+          value="join"
+        >
+          {busy && action === 'join'
+            ? 'Joining your room…'
+            : pending?.code
+              ? 'Try again'
+              : 'Join room'}
         </Button>
         <div role="status" aria-live="polite">
           {!online && (
             <SystemMessage className="my-3">
-              You’re offline. Reconnect before creating a room.
+              You’re offline. Reconnect before creating or joining a room.
             </SystemMessage>
           )}
           {busy && (
             <SystemMessage className="mb-4 mt-2.5">
-              Keep this page open while we create your room.
+              {action === 'join'
+                ? 'Keep this page open while we join your room.'
+                : 'Keep this page open while we create your room.'}
             </SystemMessage>
           )}
         </div>
         {error && (
           <SystemMessage className="my-3" role="alert">
             {error}{' '}
-            <a className="inline-block" href="/faq#connection">
-              Help with connection problems
+            <a className="inline-block" href={`/faq#${help}`}>
+              More help
             </a>
           </SystemMessage>
         )}
-        {pending && !busy && (
+        {pending && !pending.code && !busy && (
           <Button
             type="button"
             variant="text"
