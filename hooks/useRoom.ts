@@ -10,7 +10,9 @@ const stale =
 export function useRoom(code: string) {
   const [room, setRoom] = useState<RoomView | null>(null);
   const [error, setError] = useState('');
-  const [terminal, setTerminal] = useState(false);
+  const [terminal, setTerminal] = useState<'unavailable' | 'access' | null>(
+    null,
+  );
   const [busy, setBusy] = useState(true);
   const [offline, setOffline] = useState(false);
   const [uncertain, setUncertain] = useState(false);
@@ -90,7 +92,7 @@ export function useRoom(code: string) {
             response.status === 404
           ) {
             setRoom(null);
-            setTerminal(true);
+            setTerminal(response.status === 401 ? 'access' : 'unavailable');
             expired.current = true;
             setError(
               response.ok
@@ -219,6 +221,7 @@ export function useRoom(code: string) {
       else void request('GET', !!currentRoom.current);
     };
     const wentOffline = () => {
+      if (expired.current) return;
       clearTimeout(timer);
       resumePending.current = false;
       interrupted.current = true;
@@ -228,6 +231,7 @@ export function useRoom(code: string) {
       );
     };
     const wentOnline = () => {
+      if (expired.current) return;
       setOffline(false);
       if (currentRoom.current?.state === 'drawn' && !expired.current) {
         setError('');
@@ -253,22 +257,34 @@ export function useRoom(code: string) {
   }, [request]);
   useEffect(() => {
     if (!room) return;
+    let timer: ReturnType<typeof setTimeout>;
     const checkExpiry = () => {
+      clearTimeout(timer);
       if (Date.now() >= room.expiresAt) {
         expired.current = true;
         cancelTimer.current();
         controller.current?.abort();
+        currentRoom.current = null;
         setRoom(null);
-        setTerminal(true);
+        setTerminal('unavailable');
+        setBusy(false);
         setError('This room doesn’t exist or has expired.');
+      } else {
+        // Recheck the wall clock after clock adjustments, with the final
+        // wakeup at the deadline rather than the next whole second.
+        timer = setTimeout(
+          checkExpiry,
+          Math.min(room.expiresAt - Date.now(), 1000),
+        );
       }
     };
     checkExpiry();
-    const timer = window.setInterval(checkExpiry, 1000);
-    window.addEventListener('visibilitychange', checkExpiry);
+    document.addEventListener('visibilitychange', checkExpiry);
+    window.addEventListener('pageshow', checkExpiry);
     return () => {
-      clearInterval(timer);
-      window.removeEventListener('visibilitychange', checkExpiry);
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', checkExpiry);
+      window.removeEventListener('pageshow', checkExpiry);
     };
   }, [room]);
   return {

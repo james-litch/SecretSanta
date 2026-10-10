@@ -120,3 +120,19 @@ npm run test:storybook -- 'app/rooms/[code]/page.stories.tsx'
 ```
 
 The polling suite controls browser time, visibility, connectivity and HTTP responses to verify cadence, capped backoff/reset, stale/offline races, non-overlapping resume, terminal/expiry/navigation stops, participant announcements, focus and automatic result discovery. These controlled browser tests cover browser-flow behavior; the real-Redis integration and draw suites remain the privacy, authorization and storage contract checks. Storybook includes loaded Reconnecting and Offline examples alongside confirmation, uncertain draw and private results. Run `npm test` for all four suites.
+
+## Unavailable rooms and lost browser access
+
+Waiting and result screens replace private content at the original known deadline, including offline, and focus the unavailable heading. The deadline timer is independent of polling, supports lifetimes longer than a browser timeout, and checks again when a suspended page returns. Connectivity changes cannot replace a terminal explanation with a connection warning. Later visits read the server again; early Redis data loss gives the same missing/expired message and never recreates a room.
+
+Access errors retain the distinction between invalid saved credentials and absent access after drawing. They explain the original-browser requirement, no recovery or ownership transfer, and the consequences of losing owner access before and after a draw. They link to `/faq#browser` and `/faq#owner`; missing/expired rooms link to `/faq#expiry`. Each room terminal screen also offers the landing page. Transient failures keep retry behavior and never imply identity or data loss.
+
+After starting disposable Redis, run:
+
+```sh
+npm run test:browser -- tests/browser/unavailable.spec.ts tests/browser/polling.spec.ts
+npm run test:integration -- tests/integration/rooms.test.ts tests/integration/draw.test.ts tests/integration/join.test.ts
+npm run test:storybook -- 'app/rooms/[code]/page.stories.tsx'
+```
+
+The unavailable suite covers precise offline waiting/result deadlines, terminal focus and connectivity changes, invalid/cleared cookies, other-browser access, unaffected participants after owner access loss, early Redis loss and server revalidation, working FAQ anchors, transient failures, and singular/plural lifetime copy. Redis-backed operations also verify that a configuration change affects only new rooms: joins, capacity enforcement, drawing, create recovery, cookies and revisits retain the original room settings and deadline. Run the full cloud-free checks above for completion evidence.

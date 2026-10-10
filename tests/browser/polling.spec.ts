@@ -239,9 +239,10 @@ test('known expiry stops waiting-room requests and removes content while offline
   context,
 }) => {
   let reads = 0;
+  const expiresAt = Date.now() + 15_000;
   await page.route(`**/api/rooms/${code}`, (route) => {
     reads++;
-    return route.fulfill({ json: { ...room, expiresAt: Date.now() + 15_000 } });
+    return route.fulfill({ json: { ...room, expiresAt } });
   });
   await open(page);
   await context.setOffline(true);
