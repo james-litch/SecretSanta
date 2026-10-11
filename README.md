@@ -28,6 +28,12 @@ docker compose down --volumes
 
 ## Configuration
 
+The separate [hosted release gate](docs/hosted-release.md) documents Vercel Hobby /
+official Marketplace Redis Cloud setup, disposable smoke commands, connection and
+usage checks, and blockers. [Release evidence](docs/release-evidence.md) keeps local
+results separate from hosted verification; [acceptance coverage](docs/acceptance-coverage.md)
+traces all ten screen-state scenarios. Hosted verification is currently incomplete.
+
 `.env.example` documents `REDIS_URL`, `ROOM_MAX_PARTICIPANTS` (default 30, integer >= 3) and `ROOM_LIFETIME_DAYS` (default 7, positive representable integer). Startup rejects invalid capacity/lifetime. Each room snapshots both settings and its deadline; changing configuration does not alter existing rooms. Production uses `rediss://` with the provisioned provider credentials and Secure cookies. Hosted connectivity and free-tier headroom still require a separate release check.
 
 ## Cloud-free verification
