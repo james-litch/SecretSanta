@@ -20,7 +20,6 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@tabler/icons-react": "^3.49.0",
     "clsx": "^2.1.1",
     "next": "16.4.0",
     "react": "19.3.0",
@@ -35,6 +34,7 @@
     "@storybook/addon-mcp": "^10.6.1",
     "@storybook/addon-vitest": "^10.6.1",
     "@storybook/nextjs-vite": "^10.6.1",
+    "@svgr/webpack": "^8.1.0",
     "@tailwindcss/turbopack": "^4",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^20",
@@ -53,6 +53,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "latest",
+    "vite-plugin-svgr": "^5.2.0",
     "vitest": "^4"
   },
   "msw": {

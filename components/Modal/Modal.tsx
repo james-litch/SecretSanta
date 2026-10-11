@@ -1,4 +1,4 @@
-import { IconX } from '@tabler/icons-react';
+import Close from '@/icons/close.svg';
 import { clsx } from 'clsx';
 import type { DialogHTMLAttributes } from 'react';
 
@@ -27,7 +27,7 @@ export function Modal({
         command="close"
         commandfor={id}
       >
-        <IconX aria-hidden="true" size={20} />
+        <Close aria-hidden="true" size={20} />
       </button>
       <h2 id={`${id}-title`} className="mb-4 pr-10 font-display text-3xl">
         {title}

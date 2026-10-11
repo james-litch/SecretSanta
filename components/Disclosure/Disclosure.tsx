@@ -1,4 +1,4 @@
-import { IconChevronDown } from '@tabler/icons-react';
+import ChevronDown from '@/icons/chevron.svg';
 import { clsx } from 'clsx';
 import type { ComponentProps } from 'react';
 
@@ -22,10 +22,10 @@ export function Disclosure({
     >
       <summary>
         {question}
-        <IconChevronDown
+        <ChevronDown
           aria-hidden="true"
           size={20}
-          className="shrink-0 stroke-2 transition-transform"
+          className="shrink-0 stroke-2"
         />
       </summary>
       <div id={id} className="px-5 pb-1.5 text-green-muted">
