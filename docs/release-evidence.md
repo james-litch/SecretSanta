@@ -4,8 +4,9 @@ Recorded 11 October 2026. Gate: **INCOMPLETE / BLOCKED**.
 
 ## Cloud-free verification
 
-Verification base: `4181294a3a4e3875d3115239de7ad85769dd025f` plus the issue #19
-smoke/runbook changes. Final commit is available in this file's Git history.
+Verification base: `91b5f2c` plus the browser-test/dialog fixes. Final commit is
+available in this file's Git history. Hosted HTTP observations below precede
+these fixes and are not evidence that the latest commit has been deployed.
 
 - Runtime: Node v24.21.0.
 - Typecheck and lint: PASS.
@@ -13,21 +14,22 @@ smoke/runbook changes. Final commit is available in this file's Git history.
 - Local smoke including direct Redis expiry/no recreation: PASS, 1 test.
 - Smoke transport privacy regression: PASS, 1 test; synthetic authenticated
   GET/POST socket failures do not expose the cookie in the exception or its cause.
-- Final `npm test` with bundled Chromium: unit 31/31, integration 30/30,
-  Storybook 41/41, browser 54/57. The earlier Chrome run had the same browser
-  outcome. Browser prerequisite **FAILS**:
-  - `draw.spec.ts`: “separate participants and competing owner tabs see only
-    stable private results” — Shift-Tab did not focus Confirm draw.
-  - `draw.spec.ts`: “uncertain uncommitted draws retry safely, while definitive
-    errors keep their reason” — 30-second timeout, confirmation still visible.
-  - `faq.spec.ts`: “native keyboard disclosure keeps focus and skips closed
-    answer links” — Tab did not focus the answer link.
-- Focused recheck with bundled Chromium and one worker: the same three failures,
-  18 passes. Application/browser test code is unchanged by this slice; root causes
-  are not established. Do not describe the cloud-free prerequisite as passing.
-- Production build: PASS using a fresh `build/issue-19-fresh` output directory.
-  The initial sandboxed build could not bind its internal worker port; its cached
-  errors also affected the first elevated rerun. A fresh elevated build passed.
+- Final `npm test` with bundled Chromium: **PASS**, unit 31/31, integration 30/30,
+  Storybook 42/42, browser 57/57 (160 total).
+- The three initial browser failures are resolved:
+  - Native Chromium dialogs allow boundary Tab navigation into browser chrome.
+    The test now verifies forward/backward order within the dialog and that
+    background controls cannot receive focus, rather than assuming immediate wrap.
+  - Drawing synchronously disabled Confirm draw before its native close command
+    ran. The handler now closes the dialog before starting the request. Browser
+    assertions and the new `DrawRejected` story cover dismissal and reopening.
+  - The FAQ keyboard test pressed Tab while the answer was still clipped to zero
+    height. It now waits for actual opening/closing transitions to finish.
+- Focused draw/FAQ run: PASS, 21/21. Room stories: PASS, 13/13. A separate FAQ
+  privacy-anchor viewport assertion failed once during diagnosis, then passed
+  five isolated repetitions and the subsequent focused and full runs; no anchor
+  implementation change was made.
+- Production build: PASS using a fresh `build/issue-19-fixed` output directory.
 - Storybook build: PASS.
 - Formatting and two-axis code review: PASS. Standards review found and then
   verified the fix for HTTP exception credential logging; no remaining Standards
@@ -48,7 +50,8 @@ smoke/runbook changes. Final commit is available in this file's Git history.
   Verified create/join/draw/recovery behavior through the real deployment,
   separate private identities, stable recipients and original HTTP deadline,
   authorization, response projection/cache headers and Secure cookie flags.
-  This was diagnostic execution with failed cloud-free prerequisites, not sign-off.
+  At that time cloud-free prerequisites still failed; the browser fixes above
+  have since passed locally. This HTTP-only result is not release sign-off.
 - Secure Vercel-to-Redis configuration: NOT VERIFIED. Successful HTTP operations
   exercise deployed script behavior but do not prove TLS or provider identity.
 - Fixed stored expiry, natural browser expiry and no recreation: NOT RUN.
@@ -58,12 +61,14 @@ smoke/runbook changes. Final commit is available in this file's Git history.
 - Memory capacity and rejected connections/writes: NOT MEASURED.
 - Vercel baseline/delta invocations, CPU, provisioned memory and transfer:
   NOT MEASURED.
-- Hosted keyboard/screen-reader/visual walkthrough: NOT RUN.
+- Hosted keyboard/screen-reader/visual walkthrough: WAIVED by the operator on
+  11 October 2026; no longer a release requirement. Automated local coverage
+  remains required.
 - Paid upgrades: NONE performed.
 
 The operator initially had no hosting and subsequently supplied a live URL.
-Database/operator access, confirmation of a secure zero-cost Marketplace offer,
-and resolution of the browser failures remain concrete blockers.
+Database/operator access and confirmation of a secure zero-cost Marketplace offer
+remain concrete blockers.
 Local tests cannot fill these fields. Preserve the accepted early-data-loss risk
 and no-recreation behavior. Follow [the runbook](hosted-release.md), recording
 timestamp, sanitized observation and pass/fail for every item; do not publish

@@ -4,8 +4,8 @@ Status: **INCOMPLETE / BLOCKED**, 11 October 2026. Local verification is not
 hosted evidence. The operator subsequently deployed
 [the application](https://secret-santa-pink-psi.vercel.app/); its HTTP-only smoke
 passes. Database configuration/access, plan, region, connection headroom and
-hosted usage remain unverified. The cloud-free browser prerequisite also has
-three unresolved failures. This checkout has no `.vercel` project link.
+hosted usage remain unverified. See the evidence record for the latest cloud-free
+checks. This checkout has no `.vercel` project link.
 
 There is also a provider capability question to resolve before provisioning:
 [Redis's TLS guide](https://redis.io/docs/latest/operate/rc/security/database-security/tls-ssl/)
@@ -144,20 +144,17 @@ it does not substitute for the original-deadline and warm-instance checks below.
 Failed runs may leave a disposable room until its original TTL; do not flush the
 database to clean up. The diagnostic client adds one connection to measurements.
 
-## Hosted browser, natural expiry and connection checks
+## Hosted natural expiry and connection checks
 
 Record each as PASS, FAIL or NOT RUN with timestamp and deployment SHA. A green
 automated smoke alone does not complete this gate.
 
-1. In three separate browser profiles, create a fresh room and join it using
-   only synthetic names. Copy/share the code, check the roster, cancel the owner
-   confirmation, then confirm. Each profile must see only its recipient, retain
-   that result on refresh/revisit, and deny late joining from a fourth profile.
-   Use keyboard controls; check focus, status announcements, FAQ links, the
-   approved light appearance and lifetime sentence. Inspect API headers locally
-   for `private, no-store` and `Vary: Cookie`; the cookie is HttpOnly, Secure,
-   SameSite=Lax and scoped to `/api/rooms/<code>`. Do not export a HAR.
-2. For one waiting room and one drawn room, record the original HTTP `expiresAt`
+The operator waived the separate deployed-screen keyboard/accessibility/visual
+walkthrough on 11 October 2026. It is no longer a release requirement. Automated
+cloud-free browser and Storybook coverage remains required, alongside the hosted
+HTTP checks and the following expiry/connection observations.
+
+1. For one waiting room and one drawn room, record the original HTTP `expiresAt`
    and `PEXPIRETIME room:<disposable-code>` using an authorized TLS Redis client.
    They must agree. Repeat reads, joins/recovery where eligible, and draw; the
    absolute deadline must remain identical. Retain the profiles until the
@@ -166,14 +163,14 @@ automated smoke alone does not complete this gate.
    unavailable and `EXISTS` must return zero. The offline part needs the browser
    awake; also check resuming a suspended tab. If the run cannot wait, leave this
    check NOT RUN rather than changing the application's lifetime validation.
-3. With only the disposable deployment active, measure Redis connections at
+2. With only the disposable deployment active, measure Redis connections at
    baseline, after sequential reads, and during a small bounded overlap (three
    profiles, one visible waiting tab each, five minutes). Keep the same function
    instance warm where the platform permits and correlate instance activity
    with Redis connection IDs/ages or provider metrics. Sequential requests in
    the same instance must reuse a connection; counts must not climb once per
    request. Global counts alone cannot prove same-instance reuse when scaling.
-4. In the isolated database, identify a connection belonging to that warm
+3. In the isolated database, identify a connection belonging to that warm
    application instance using the provider's client diagnostics. If supported,
    close that one connection with `CLIENT KILL ID <verified-id>`; never use a
    broad kill filter on a shared database. Request the same room again. Record

@@ -53,7 +53,8 @@ it is not a claim that each individual test covers an entire scenario.
    `polling.spec.ts` checks non-repeating announcements and retained focus;
    `unavailable.spec.ts` checks terminal focus. Landing, room, FormField, Button,
    Disclosure and Modal stories provide interaction and automated a11y checks.
-   Automated checks do not replace the hosted keyboard/screen-reader walkthrough.
+   The operator waived a separate hosted screen walkthrough on 11 October 2026;
+   the automated accessibility and browser checks remain required.
 9. **FAQ links, content and motion.** `tests/browser/faq.spec.ts` covers all ten
    direct anchors, header links, native Enter/Space and tab order, smooth CSS
    enhancement, reduced motion and no-animation fallback. `app/faq/page.stories.tsx`
