@@ -2,8 +2,8 @@ import type { Preview } from '@storybook/nextjs-vite';
 import { mswLoader } from 'msw-storybook-addon/csf3';
 import '../app/globals.css';
 import { Header } from '../components/Header/Header';
-import { SprigDecoration } from '../components/SprigDecoration/SprigDecoration';
 import { mswHandlers } from './msw-handlers';
+import Sprig from '../icons/sprig.svg'
 
 const preview: Preview = {
   decorators: [
@@ -12,7 +12,7 @@ const preview: Preview = {
         // Storybook owns the document; only reproduce the layout's visible content.
         <div className="relative isolate min-h-screen overflow-clip">
           <Header />
-          <SprigDecoration />
+          <Sprig className="pointer-events-none absolute bottom-0 left-0 -z-10 w-24 md:w-36 lg:w-44 opacity-65" />
           <Story />
         </div>
       ) : (

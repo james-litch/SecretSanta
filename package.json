@@ -53,6 +53,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "latest",
+    "vite-plugin-svgr": "^5.2.0",
     "vitest": "^4"
   },
   "msw": {
