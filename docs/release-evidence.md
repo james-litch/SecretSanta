@@ -42,8 +42,10 @@ these fixes and are not evidence that the latest commit has been deployed.
   Vercel edge identifier is not proof of the function or Redis region.
 - Vercel account plan and remaining usage: NOT VERIFIED (target Hobby).
 - Official Marketplace subscription/database and Redis region: NOT VERIFIED.
-- Actual Redis plan, TLS support, memory/connection limits, eviction policy:
-  NOT VERIFIED (target Free; TLS documentation conflict recorded in runbook).
+- Redis plan and provisioned memory: **Free — 30 MB**, confirmed by the operator
+  on 11 October 2026; not independently inspected in the provider console.
+- TLS support, actual connection limit and eviction policy: NOT VERIFIED
+  (TLS documentation conflict recorded in runbook).
 - Hosted HTTP-only smoke: PASS on 11 October 2026, around 18:04 Europe/London,
   one test, 6.3 seconds. Command:
   `SMOKE_HTTP_ONLY=1 SMOKE_ORIGIN=https://secret-santa-pink-psi.vercel.app npm run test:smoke`.
@@ -58,7 +60,8 @@ these fixes and are not evidence that the latest commit has been deployed.
 - Same-instance connection reuse and interrupted-socket reconnect: NOT RUN.
 - Baseline/peak connections, diagnostic connections, operating reserve and
   remaining headroom: NOT MEASURED.
-- Memory capacity and rejected connections/writes: NOT MEASURED.
+- Used/remaining memory within the 30 MB plan and rejected connections/writes:
+  NOT MEASURED.
 - Vercel baseline/delta invocations, CPU, provisioned memory and transfer:
   NOT MEASURED.
 - Hosted keyboard/screen-reader/visual walkthrough: WAIVED by the operator on
