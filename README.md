@@ -136,3 +136,28 @@ npm run test:storybook -- 'app/rooms/[code]/page.stories.tsx'
 ```
 
 The unavailable suite covers precise offline waiting/result deadlines, terminal focus and connectivity changes, invalid/cleared cookies, other-browser access, unaffected participants after owner access loss, early Redis loss and server revalidation, working FAQ anchors, transient failures, and singular/plural lifetime copy. Redis-backed operations also verify that a configuration change affects only new rooms: joins, capacity enforcement, drawing, create recovery, cookies and revisits retain the original room settings and deadline. Run the full cloud-free checks above for completion evidence.
+
+## FAQ verification
+
+The header links to `/faq` from every screen. Stable answer URLs are
+`/faq#browser`, `#devices`, `#owner`, `#changes`, `#capacity`, `#sharing`,
+`#draw`, `#privacy`, `#expiry` and `#connection` (all fragments on `/faq`).
+Existing error screens can keep linking to these answers. Fragment targets live
+inside native disclosures so the browser reveals the answer; heading focus on
+arrival preserves the fragment's scroll position.
+
+No Redis or cloud credentials are needed for the focused FAQ checks:
+
+```sh
+npm run typecheck
+npm run test:storybook -- components/Disclosure/Disclosure.stories.tsx app/faq/page.stories.tsx
+npm run test:browser -- tests/browser/faq.spec.ts
+```
+
+These cover all answer anchors, header navigation, native Enter/Space and Tab
+behavior, closed-answer links being skipped, visible keyboard focus, unchanged
+regular question typography, reduced motion and a simulated no-animation CSS
+fallback. The existing disclosure CSS supplies the native opening/closing
+transitions; the global reduced-motion rule disables both content and chevron
+animation. The full cloud-free suite above also verifies the underlying privacy,
+expiry and retry contracts described by these answers.
