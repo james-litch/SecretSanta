@@ -67,6 +67,3 @@ show the relevant states and variants.
   `id` on the relevant content inside `<details>` so the browser can reveal it
   when navigating to that fragment. Avoid duplicating native behavior with
   custom opening and hash-handling logic; verify it in supported browsers.
-- Use Tabler's `IconChevronDown` for the disclosure indicator. Add the
-  `@tabler/icons-react` dependency when implementing this change, and style the
-  indicator using the native open state.
