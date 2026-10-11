@@ -70,4 +70,4 @@ it is not a claim that each individual test covers an entire scenario.
 The new `tests/smoke/exchange.spec.ts` adds deployment-boundary HTTP checks using
 isolated identities, actual scripts, cookie flags, response privacy, one saved
 draw and Redis expiry/no recreation. Its local mode validates the smoke harness;
-only running it against Vercel and Redis Cloud supplies hosted evidence.
+only running it against Vercel and Upstash Redis supplies hosted evidence.

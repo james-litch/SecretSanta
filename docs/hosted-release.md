@@ -7,19 +7,17 @@ passes. Database configuration/access, plan, region, connection headroom and
 hosted usage remain unverified. See the evidence record for the latest cloud-free
 checks. This checkout has no `.vercel` project link.
 
-There is also a provider capability question to resolve before provisioning:
-[Redis's TLS guide](https://redis.io/docs/latest/operate/rc/security/database-security/tls-ssl/)
-says Free Essentials does not support TLS, whereas the
-[subscription comparison](https://redis.io/docs/latest/operate/rc/subscriptions/)
-lists encryption in transit for Free. Both were checked on 11 October 2026.
-Confirm the actual official Marketplace offer supports a certificate-verified
-`rediss://` connection at zero cost. Do not assume changing the URL scheme enables
-TLS. If it cannot, the selected free-hosting contract needs an explicit decision;
-do not substitute plaintext, disable certificate validation or upgrade silently.
+The operator selected **Upstash Redis Free** on 11 October 2026, replacing the
+Redis Cloud Free target because that plan does not support TLS. This explicitly
+supersedes the provider choice in [#19](https://github.com/james-litch/SecretSanta/issues/19)
+and the [earlier hosting decision](https://github.com/james-litch/SecretSanta/issues/7#issuecomment-6068643313);
+the exchange requirements in [#11](https://github.com/james-litch/SecretSanta/issues/11)
+remain unchanged. Upstash documents [always-on TLS](https://upstash.com/docs/redis/features/security)
+and [native Redis TCP support](https://upstash.com/docs/redis/overall/compatibility).
+The existing Node Redis client and atomic Lua operations can use this endpoint;
+no REST SDK or storage-format migration is required. Hosted compatibility still
+requires the full smoke against the provisioned database.
 
-The source contracts are [#19](https://github.com/james-litch/SecretSanta/issues/19),
-[specification #11](https://github.com/james-litch/SecretSanta/issues/11) and the
-[hosting decision](https://github.com/james-litch/SecretSanta/issues/7#issuecomment-6068643313).
 The steps below are a runbook. Actual observations, including the limited hosted
 HTTP result, are recorded separately in [release evidence](release-evidence.md).
 
@@ -33,20 +31,21 @@ HTTP result, are recorded separately in [release evidence](release-evidence.md).
    for these API operations. Installed guides consulted: `17-deploying.md`,
    `15-route-handlers.md` and `environment-variables.md` under
    `node_modules/next/dist/docs/01-app/`.
-2. Follow the [official Redis Marketplace integration](https://redis.io/docs/latest/operate/rc/cloud-integrations/vercel/):
-   Storage → Redis → Create, select the actual free offer and region, then Connect
-   Project for the intended environment. Record the subscription, database and
-   Vercel function regions. Choose nearby regions when available; do not invent
-   a region or enable paid high availability. Stop if secure free connectivity
-   is unavailable or the offer requires payment.
-3. Inspect the generated environment variable names. The app reads **`REDIS_URL`**,
-   not a REST endpoint/token or a provider-specific prefixed variable. Map the
-   provider's secure connection URL to that server-only name in Vercel. It has
-   the form `rediss://default:<encoded-password>@<host>:<tls-port>`; use the
-   provider value, not this placeholder. Never use `NEXT_PUBLIC_` for credentials.
-   Leave certificate verification enabled. The current client uses Node's trust
-   store; a database requiring a custom CA or mutual TLS needs explicit client
-   configuration before this gate can pass. Do not claim it already supports it.
+2. Follow the [official Upstash Vercel integration](https://upstash.com/docs/redis/howto/vercelintegration).
+   Install Upstash from Vercel Marketplace, choose Redis and the **Free** plan,
+   then connect the Secret Santa project and intended environment. Record the
+   actual plan and database/function regions; choose a nearby primary region.
+   Keep [eviction disabled](https://upstash.com/docs/redis/features/eviction): rooms
+   are stored data, not a disposable cache. Do not enable paid upgrades, extra
+   regions or paid features. Stop if the offer requires payment.
+3. The app reads **`REDIS_URL`**: map Upstash's **TCP TLS connection URL** to this
+   server-only Vercel variable. Use the exact provider-issued `rediss://` URL,
+   including its username, password, host and port. A Marketplace `KV_URL` can
+   be copied into `REDIS_URL` only if it is that TLS Redis URL. Neither an HTTPS
+   REST URL nor a REST token works with the current Node Redis client. Check for
+   an old Redis Cloud `REDIS_URL` in each environment and replace that value;
+   merely adding Upstash's REST variables does not switch this app. Never use
+   `NEXT_PUBLIC_` or disable certificate verification.
 4. Set `ROOM_MAX_PARTICIPANTS=30` and `ROOM_LIFETIME_DAYS=1` for disposable smoke
    rooms (one day is the minimum accepted lifetime). Production defaults are
    30 and 7; record final values separately. Do not set `NEXT_TEST_DIST_DIR` on
@@ -183,18 +182,22 @@ HTTP checks and the following expiry/connection observations.
 ## Capacity and usage decision
 
 At verification time record the actual plan limits and observed values, not
-just the advertised offer. The current subscription comparison lists Free as
-30 MB and 30 concurrent database connections. These are **not 30 participants**.
-Reserve connections for diagnostic tools, preview deployments, overlapping old
-deployments and scaling. Record peak connections and remaining headroom as
-`provisioned limit - measured peak`, plus a deliberate operating reserve. Record
-used/available memory, eviction policy and any rejected connections/writes.
+just the advertised offer. [Upstash Free pricing](https://upstash.com/pricing/redis)
+currently lists 256 MB (shown as 250 MB on the plan card), 500,000 commands/month
+and 10 GB monthly bandwidth. Confirm the provisioned limits in the dashboard.
+Do not carry over Redis Cloud's 30 MB or 30-connection limits. Record Upstash's
+actual concurrent-connection and throughput limits separately from participants.
+Reserve connections for diagnostics, previews, overlapping deployments and scaling.
+Record peak connections, operating reserve, used/available storage, remaining
+commands and bandwidth, eviction setting, and rejected connections/writes.
 
 For an explicit small-use assumption of 30 visible waiting tabs open for one
 hour, three-second polling produces roughly `30 × 3600 / 3 = 36,000` reads.
 Thirty tabs left open continuously for 30 days could produce about 25.92 million
 reads. Latency/backoff can reduce this; page requests, joins, retries and draws
-add usage. Hidden/offline pauses and stopping after draw do not cap visible-tab
+add usage. One hour at that example load uses about 7.2% of a 500,000-command
+allowance from polling alone (one hash read per successful poll); account for
+other commands and verify actual billing counters. Hidden/offline pauses and stopping after draw do not cap visible-tab
 usage. Database connection count is a separate constraint from request volume.
 
 [Vercel Hobby's current documentation](https://vercel.com/docs/plans/hobby)
@@ -206,8 +209,25 @@ metric is not zero. Estimate intended exchange volume from these observations.
 Hobby is for personal non-commercial use; exceeding limits can suspend service.
 Do not treat a brief smoke as a zero-cost guarantee or load test.
 
-Redis Free's lack of persistence remains an accepted risk; expiry is an upper
-lifetime bound, not a durability promise. See [persistence support](https://redis.io/docs/latest/operate/rc/databases/configuration/data-persistence/).
-Early data loss must remain unavailable, with no recreated room or saved draw.
-Any need for a paid plan or changed provider is a new explicit decision. Close
-the gate only after all hosted observations and capacity fields have evidence.
+Upstash provides [durable storage](https://upstash.com/docs/redis/features/durability).
+This improves on the previous Redis Cloud Free persistence assumption, but expiry
+is still an upper lifetime bound: missing data must remain unavailable, with no
+recreated room or saved draw. Do not infer backups or a durability guarantee from
+local tests. Any paid upgrade requires a separate decision. Close the gate only
+after all hosted observations and capacity fields have evidence.
+
+## Switching the existing deployment
+
+The operator confirmed the old database contains only test rooms and authorized
+a fresh start. No room data needs copying. Keep the same deployment hostname so
+cookie scope remains unchanged; old test-room links will become unavailable.
+
+1. Provision the free Upstash database and configure `REDIS_URL` as above.
+2. Redeploy the latest intended commit with that environment. Record its SHA and
+   verify the deployment uses the Upstash endpoint, without recording credentials.
+3. Run the full hosted smoke with `SMOKE_REDIS_URL` pointing to that same database.
+   The test's direct expiry check also catches accidentally testing a different
+   database from the one used by the deployment.
+4. Keep the old database until verification finishes. Do not delete it as part
+   of this runbook. Reverting the URL would hide new Upstash rooms and restore
+   the old test data, so rollback is not a data merge.

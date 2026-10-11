@@ -35,7 +35,19 @@ these fixes and are not evidence that the latest commit has been deployed.
   verified the fix for HTTP exception credential logging; no remaining Standards
   or Spec findings. The release blockers below remain unresolved.
 
-## Hosted verification
+## Upstash migration — 11 October 2026
+
+- Operator authorized Upstash and confirmed only test rooms exist: start fresh.
+- Target: Upstash Redis Free through Vercel Marketplace, native TCP with TLS.
+- Existing Node Redis client, room hashes and atomic scripts are retained.
+- Local HTTP smoke including expiry/no recreation: PASS, 1 test (4.7 seconds).
+  Standards and Spec reviews: no findings. No application code changed.
+- Upstash database creation, Vercel environment cutover and redeployment: PENDING.
+- Full smoke against Upstash, actual plan/region/eviction and usage: NOT VERIFIED.
+- Previous hosted results below describe the earlier deployment, not Upstash.
+  The earlier 30 MB plan confirmation does not establish any Upstash limit.
+
+## Previous hosted verification (before Upstash)
 
 - Deployment URL: https://secret-santa-pink-psi.vercel.app/ (operator supplied).
   Deployment ID, SHA and Vercel function region: NOT VERIFIED. The response's
@@ -45,7 +57,7 @@ these fixes and are not evidence that the latest commit has been deployed.
 - Redis plan and provisioned memory: **Free — 30 MB**, confirmed by the operator
   on 11 October 2026; not independently inspected in the provider console.
 - TLS support, actual connection limit and eviction policy: NOT VERIFIED
-  (TLS documentation conflict recorded in runbook).
+  (subsequently resolved by selecting Upstash; old endpoint still unverified).
 - Hosted HTTP-only smoke: PASS on 11 October 2026, around 18:04 Europe/London,
   one test, 6.3 seconds. Command:
   `SMOKE_HTTP_ONLY=1 SMOKE_ORIGIN=https://secret-santa-pink-psi.vercel.app npm run test:smoke`.
@@ -70,8 +82,8 @@ these fixes and are not evidence that the latest commit has been deployed.
 - Paid upgrades: NONE performed.
 
 The operator initially had no hosting and subsequently supplied a live URL.
-Database/operator access and confirmation of a secure zero-cost Marketplace offer
-remain concrete blockers.
+Upstash provisioning, operator access and deployment cutover remain concrete
+blockers. The provider choice has been resolved; the migration is not yet live.
 Local tests cannot fill these fields. Preserve the accepted early-data-loss risk
 and no-recreation behavior. Follow [the runbook](hosted-release.md), recording
 timestamp, sanitized observation and pass/fail for every item; do not publish
