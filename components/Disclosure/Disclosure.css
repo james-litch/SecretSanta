@@ -1,23 +1,12 @@
 .disclosure {
+  --animation-duration: 0.4s;
+
   margin-block: --spacing(2.5);
   border: 1px solid var(--color-cream-dark);
   border-radius: var(--radius-lg);
   background: var(--color-cream-light);
   text-align: left;
   interpolate-size: allow-keywords;
-
-  &::details-content {
-    height: 0;
-    overflow: clip;
-    transition:
-      height 0.3s ease,
-      content-visibility 0.5s;
-    transition-behavior: allow-discrete;
-  }
-
-  &[open]::details-content {
-    height: auto;
-  }
 
   > summary {
     display: flex;
@@ -30,9 +19,31 @@
     &::-webkit-details-marker {
       display: none;
     }
+
+    svg {
+      transition: transform var(--animation-duration) ease;
+    }
   }
 
+  &::details-content {
+    height: 0;
+    overflow-y: clip;
+    transition:
+      content-visibility var(--animation-duration) allow-discrete,
+      height var(--animation-duration);
+  }
+
+  &[open]::details-content {
+    height: auto;
+  }
   &[open] > summary svg {
     transform: rotate(180deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::details-content,
+    > summary svg {
+      transition: none;
+    }
   }
 }

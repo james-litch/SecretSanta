@@ -25,7 +25,7 @@ export function Disclosure({
         <IconChevronDown
           aria-hidden="true"
           size={20}
-          className="shrink-0 stroke-2 transition-transform"
+          className="shrink-0 stroke-2"
         />
       </summary>
       <div id={id} className="px-5 pb-1.5 text-green-muted">
