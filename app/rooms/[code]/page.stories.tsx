@@ -256,6 +256,45 @@ export const PrivateResult: Story = {
   },
 };
 
+export const DrawRejected: Story = {
+  parameters: {
+    msw: {
+      handlers: [
+        http.get(`/api/rooms/${room.code}`, () => HttpResponse.json(readyRoom)),
+        http.post(`/api/rooms/${room.code}/draw`, () =>
+          HttpResponse.json(
+            {
+              error: 'insufficient_membership',
+              message: 'A draw needs at least three participants.',
+            },
+            { status: 409 },
+          ),
+        ),
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const trigger = await canvas.findByRole('button', { name: 'Draw names' });
+    await userEvent.click(trigger);
+    await userEvent.click(canvas.getByRole('button', { name: 'Confirm draw' }));
+    await waitFor(() =>
+      expect(canvas.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    await expect(await canvas.findByRole('alert')).toHaveTextContent(
+      'A draw needs at least three participants.',
+    );
+    await userEvent.click(trigger);
+    await waitFor(() =>
+      expect(canvas.getByRole('dialog', { name: 'Draw names?' })).toBeVisible(),
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Close modal' }));
+    await waitFor(() =>
+      expect(canvas.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+  },
+};
+
 export const UncertainDraw: Story = {
   parameters: {
     msw: {

@@ -33,6 +33,7 @@ async function ready(page: Page) {
 async function confirm(page: Page) {
   await page.getByRole('button', { name: 'Draw names', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm draw' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
 test('separate participants and competing owner tabs see only stable private results', async ({
@@ -65,11 +66,17 @@ test('separate participants and competing owner tabs see only stable private res
     await expect(
       page.getByRole('button', { name: 'Close modal' }),
     ).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
+    // Native dialogs keep background controls inert, but allow focus to leave
+    // the document for browser chrome at the tab-order boundaries.
+    await trigger.evaluate((button) => button.focus());
+    await expect(
+      page.getByRole('button', { name: 'Close modal' }),
+    ).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(
       page.getByRole('button', { name: 'Confirm draw' }),
     ).toBeFocused();
-    await page.keyboard.press('Tab');
+    await page.keyboard.press('Shift+Tab');
     await expect(
       page.getByRole('button', { name: 'Close modal' }),
     ).toBeFocused();

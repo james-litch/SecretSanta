@@ -127,9 +127,12 @@ function RoomContent({ code }: { code: string }) {
                 <div className="flex flex-wrap justify-end gap-3">
                   <Button
                     disabled={busy || offline}
-                    command="close"
-                    commandfor="draw-confirmation"
-                    onClick={draw}
+                    onClick={(event) => {
+                      // Drawing disables this button synchronously, preventing
+                      // its native command default action from closing the dialog.
+                      event.currentTarget.closest('dialog')?.close();
+                      void draw();
+                    }}
                   >
                     Confirm draw
                   </Button>

@@ -1,4 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
+
+async function finishDisclosureTransition(details: Locator) {
+  await details.evaluate((element) =>
+    Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished),
+    ),
+  );
+}
 
 test('the FAQ explains the saved draw and private recipients', async ({
   page,
@@ -125,11 +135,15 @@ test('native keyboard disclosure keeps focus and skips closed answer links', asy
   await expect(details).toHaveAttribute('open', '');
   await expect(summary).toBeFocused();
   await expect(summary).toHaveCSS('outline-style', 'solid');
+  // While opening, the answer starts clipped to zero height and is not yet
+  // in the browser's tab order. Wait for the actual transition, not a sleep.
+  await finishDisclosureTransition(details);
   await page.keyboard.press('Tab');
   await expect(link).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Space');
   await expect(details).not.toHaveAttribute('open', '');
+  await finishDisclosureTransition(details);
   await expect(summary).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(next).toBeFocused();
