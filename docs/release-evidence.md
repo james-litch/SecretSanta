@@ -35,15 +35,45 @@ these fixes and are not evidence that the latest commit has been deployed.
   verified the fix for HTTP exception credential logging; no remaining Standards
   or Spec findings. The release blockers below remain unresolved.
 
-## Upstash migration — 11 October 2026
+## Upstash migration — 11–12 October 2026
 
 - Operator authorized Upstash and confirmed only test rooms exist: start fresh.
 - Target: Upstash Redis Free through Vercel Marketplace, native TCP with TLS.
 - Existing Node Redis client, room hashes and atomic scripts are retained.
 - Local HTTP smoke including expiry/no recreation: PASS, 1 test (4.7 seconds).
   Standards and Spec reviews: no findings. No application code changed.
-- Upstash database creation, Vercel environment cutover and redeployment: PENDING.
-- Full smoke against Upstash, actual plan/region/eviction and usage: NOT VERIFIED.
+- Database `secret-santa-upstash`: created through Vercel Marketplace; Free,
+  500,000 monthly commands, primary `iad1`, no read regions, eviction disabled.
+  These settings were observed in the provisioning confirmation.
+- Production and Preview: Upstash now supplies integration-managed `REDIS_URL`.
+  Its copied TCP connection URL was verified to use `rediss://` without printing
+  credentials. Old Redis Cloud connection retained as `OLD_REDIS_URL`; no data
+  was deleted or copied.
+- Production redeployment `GbTQ5WZxdrxH8Q7eFsjCCffCgSqd`: READY at
+  23:13:55 Europe/London on 11 October 2026, same source
+  `4181294a3a4e3875d3115239de7ad85769dd025f` with updated project settings.
+  Local issue #19 fixes remain unpushed and are not part of this deployment.
+- Full hosted smoke against Upstash: PASS on 12 October 2026, 1 test, 6.1 seconds.
+  Verified create/join/recovery, authorization, private identities/responses,
+  competing draws, unique non-self recipients, stable revisits, TLS diagnostics,
+  physical expiry and no recreation after expiry. The direct connection found
+  the exact stored deadline for the room created through the production API.
+- Initial strict physical-expiry checks failed: first a 2 ms offset, then 13 ms
+  movement during an exchange. Disposable probes reproduced small expiry shifts
+  on hash writes (up to 121 ms across ten writes); reapplying PEXPIREAT still
+  showed -19 to +22 ms offsets. Application `expiresAt` remained exact.
+- Operator accepted up to one second of physical expiry variance on 12 October.
+  The smoke checks physical expiry against the original application deadline
+  before and after activity, and checks stored `expiresAt` exactly. Local Redis
+  retains zero tolerance. This is evidence for the tested three-participant
+  exchange, not a provider-wide bound or a full-capacity load test.
+- Latest local regression: all 160 tests PASS; typecheck and lint PASS.
+  Final local smoke PASS (4.4 seconds). Standards review: no findings; Spec
+  review caught and corrected natural-expiry instructions to allow physical
+  cleanup until deadline + 1 second while requiring exact HTTP access cutoff.
+- Natural expiry/access-cutoff observation, warm-instance reuse/reconnect,
+  full-capacity expiry variance, and storage/bandwidth/connection headroom:
+  NOT VERIFIED. These keep the broader issue #19 release gate incomplete.
 - Previous hosted results below describe the earlier deployment, not Upstash.
   The earlier 30 MB plan confirmation does not establish any Upstash limit.
 
@@ -82,8 +112,9 @@ these fixes and are not evidence that the latest commit has been deployed.
 - Paid upgrades: NONE performed.
 
 The operator initially had no hosting and subsequently supplied a live URL.
-Upstash provisioning, operator access and deployment cutover remain concrete
-blockers. The provider choice has been resolved; the migration is not yet live.
+Upstash is provisioned, environment bindings are updated, and production was
+redeployed successfully. The full automated hosted smoke passes; the remaining
+release observations listed above are still pending.
 Local tests cannot fill these fields. Preserve the accepted early-data-loss risk
 and no-recreation behavior. Follow [the runbook](hosted-release.md), recording
 timestamp, sanitized observation and pass/fail for every item; do not publish

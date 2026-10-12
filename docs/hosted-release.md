@@ -3,8 +3,9 @@
 Status: **INCOMPLETE / BLOCKED**, 11 October 2026. Local verification is not
 hosted evidence. The operator subsequently deployed
 [the application](https://secret-santa-pink-psi.vercel.app/); its HTTP-only smoke
-passes. Database configuration/access, plan, region, connection headroom and
-hosted usage remain unverified. See the evidence record for the latest cloud-free
+passes. The subsequent Upstash migration and full automated hosted smoke also
+pass, with the operator-approved physical-expiry tolerance below. Natural expiry,
+connection headroom/recovery and hosted usage remain unverified. See the evidence record for the latest cloud-free
 checks. This checkout has no `.vercel` project link.
 
 The operator selected **Upstash Redis Free** on 11 October 2026, replacing the
@@ -135,7 +136,11 @@ Raw credentials, operations and bodies stay in memory; do not enable traces,
 HTTP debug logs or storage-state exports for hosted runs.
 
 The diagnostic Redis connection first checks that this newly created room's
-`PEXPIRETIME` equals the HTTP `expiresAt`, then checks it again after all activity.
+stored `expiresAt` equals the HTTP deadline, then checks it again after all
+activity. `PEXPIRETIME` must be within one second of that original deadline on
+Upstash (operator accepted on 12 October 2026), and exact on local Redis. Hosted
+probes found small physical expiry shifts on hash writes; this tolerance applies
+only to database cleanup, not the stored application deadline or access cutoff.
 It shortens **only that room's** TTL to one millisecond and checks that expiration,
 reads and all mutation retries leave the key absent. No scans, global flushes or
 shared-room deletion are used. This verifies physical expiry and no recreation;
@@ -155,21 +160,28 @@ HTTP checks and the following expiry/connection observations.
 
 1. For one waiting room and one drawn room, record the original HTTP `expiresAt`
    and `PEXPIRETIME room:<disposable-code>` using an authorized TLS Redis client.
-   They must agree. Repeat reads, joins/recovery where eligible, and draw; the
-   absolute deadline must remain identical. Retain the profiles until the
+   The stored application deadline must agree exactly; Upstash physical expiry
+   may differ by at most the accepted one second. Repeat reads, joins/recovery
+   where eligible, and draw; the application deadline must remain identical and
+   physical expiry must remain within that original deadline's tolerance. Retain the profiles until the
    original one-day deadline. Put them offline just before it: private content
    must disappear at that deadline. Reconnect and revisit: HTTP must return
-   unavailable and `EXISTS` must return zero. The offline part needs the browser
+   unavailable at the original deadline, even if the physical key is still present.
+   Check `EXISTS` returns zero by `expiresAt + 1000 ms` on Upstash (at the exact
+   deadline for local Redis). The offline part needs the browser
    awake; also check resuming a suspended tab. If the run cannot wait, leave this
    check NOT RUN rather than changing the application's lifetime validation.
-2. With only the disposable deployment active, measure Redis connections at
+2. Repeat the expiry checks at the configured maximum participant capacity,
+   including joins and recovery retries. The three-participant smoke does not
+   establish a physical-expiry bound for larger exchanges.
+3. With only the disposable deployment active, measure Redis connections at
    baseline, after sequential reads, and during a small bounded overlap (three
    profiles, one visible waiting tab each, five minutes). Keep the same function
    instance warm where the platform permits and correlate instance activity
    with Redis connection IDs/ages or provider metrics. Sequential requests in
    the same instance must reuse a connection; counts must not climb once per
    request. Global counts alone cannot prove same-instance reuse when scaling.
-3. In the isolated database, identify a connection belonging to that warm
+4. In the isolated database, identify a connection belonging to that warm
    application instance using the provider's client diagnostics. If supported,
    close that one connection with `CLIENT KILL ID <verified-id>`; never use a
    broad kill filter on a shared database. Request the same room again. Record
@@ -223,6 +235,11 @@ a fresh start. No room data needs copying. Keep the same deployment hostname so
 cookie scope remains unchanged; old test-room links will become unavailable.
 
 1. Provision the free Upstash database and configure `REDIS_URL` as above.
+   For Marketplace-managed variables, update the old Redis connection's custom
+   prefix to `OLD` (retains `OLD_REDIS_URL`), then leave Upstash's custom prefix
+   empty so its integration provides `REDIS_URL`. This avoids manually duplicating
+   credentials and preserves integration-managed rotation. Verify both Production
+   and Preview bindings before redeploying.
 2. Redeploy the latest intended commit with that environment. Record its SHA and
    verify the deployment uses the Upstash endpoint, without recording credentials.
 3. Run the full hosted smoke with `SMOKE_REDIS_URL` pointing to that same database.

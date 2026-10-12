@@ -119,8 +119,19 @@ test('disposable exchange preserves private identities, one saved draw and its o
     const path = `/api/rooms/${room.code}`;
     const key = `room:${room.code}`;
     // Confirms diagnostics target the same database before touching this new room.
-    if (diagnostics)
-      expect(await diagnostics.pExpireTime(key)).toBe(room.expiresAt);
+    async function verifyStoredExpiry() {
+      if (!diagnostics) return;
+      expect(await diagnostics.hGet(key, 'expiresAt')).toBe(
+        String(room.expiresAt),
+      );
+      // Upstash hash writes can shift physical expiry slightly. The operator
+      // accepts up to one second; the application deadline must remain exact.
+      const storedExpiry = await diagnostics.pExpireTime(key);
+      expect(Math.abs(storedExpiry - room.expiresAt)).toBeLessThanOrEqual(
+        process.env.SMOKE_LOCAL === '1' ? 0 : 1000,
+      );
+    }
+    await verifyStoredExpiry();
 
     const denied = await responseJson(await outsider.get(path), 401);
     expect(
@@ -231,7 +242,7 @@ test('disposable exchange preserves private identities, one saved draw and its o
       );
       return;
     }
-    expect(await diagnostics.pExpireTime(key)).toBe(room.expiresAt);
+    await verifyStoredExpiry();
     // Accelerated physical expiry, only for the room created above. Natural
     // deadline/browser expiry and warm-instance reconnect remain runbook checks.
     await diagnostics.pExpire(key, 1);
